@@ -22,8 +22,13 @@ import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.CordovaResourceApi;
 
+import android.content.BroadcastReceiver;
+import android.content.Intent;
+import android.content.IntentFilter;
+
 import android.content.Context;
 import android.media.AudioManager;
+import android.media.AudioManager.OnAudioFocusChangeListener;
 import android.net.Uri;
 import android.util.Log;
 
@@ -54,6 +59,46 @@ public class AudioHandler extends CordovaPlugin {
     ArrayList<AudioPlayer> pausedForPhone;     // Audio players that were paused when phone call came in
     private int origVolumeStream = -1;
     private CallbackContext messageChannel;
+    private BroadcastReceiver musicReceiver;
+
+    private class FocusListener implements AudioManager.OnAudioFocusChangeListener {
+        AudioManager audioManager;
+
+        public FocusListener (Context ctx) {
+            this.audioManager = (AudioManager)ctx.getSystemService(Context.AUDIO_SERVICE);
+            int result = this.audioManager.requestAudioFocus(this,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN);
+
+            if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS);
+            }
+        }
+
+        @Override
+        public void onAudioFocusChange (int focusChange) {
+            if (focusChange == AudioManager.AUDIOFOCUS_LOSS) {
+                for (AudioPlayer audio : players.values()) {
+                    if (audio.getState() == AudioPlayer.STATE.MEDIA_RUNNING.ordinal()) {
+                        audio.pausePlaying();
+                    }
+                }
+            }
+        }
+
+        public void abandonFocus() {
+            if (this.audioManager != null) {
+                this.audioManager.abandonAudioFocus(this);
+                this.audioManager = null;
+            }
+        }
+
+        public void onDestroy() {
+            abandonFocus();
+        }
+    }
+
+    private FocusListener focusListener;
 
     /**
      * Constructor.
@@ -61,6 +106,8 @@ public class AudioHandler extends CordovaPlugin {
     public AudioHandler() {
         this.players = new HashMap<String, AudioPlayer>();
         this.pausedForPhone = new ArrayList<AudioPlayer>();
+        this.musicReceiver = null;
+        this.focusListener = null;
     }
 
     /**
@@ -151,13 +198,31 @@ public class AudioHandler extends CordovaPlugin {
      * Stop all audio players and recorders.
      */
     public void onDestroy() {
+        removeMusicReceiver();
+
         if (!players.isEmpty()) {
             onLastPlayerReleased();
         }
+
         for (AudioPlayer audio : this.players.values()) {
             audio.destroy();
         }
+
         this.players.clear();
+    }
+
+    private void removeMusicReceiver() {
+        if (this.musicReceiver != null) {
+            try {
+                this.cordova.getActivity().unregisterReceiver(this.musicReceiver);
+                this.musicReceiver = null;
+            } catch (Exception e) { }
+        }
+
+        if (this.focusListener != null) {
+            this.focusListener.abandonFocus();
+            this.focusListener = null;
+        }
     }
 
     /**
@@ -379,11 +444,102 @@ public class AudioHandler extends CordovaPlugin {
     }
 
     private void onFirstPlayerCreated() {
+        IntentFilter intentFilter = new IntentFilter();
+        intentFilter.addAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
+
+        if (this.musicReceiver == null) {
+            this.musicReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    for (AudioPlayer audio : players.values()) {
+                        if (audio.getState() == AudioPlayer.STATE.MEDIA_RUNNING.ordinal()) {
+                            audio.pausePlaying();
+                        }
+                    }
+                }
+            };
+
+            cordova.getActivity().registerReceiver(this.musicReceiver, intentFilter);
+        }
+
+        if (this.focusListener == null) {
+            /*AudioManager audioManager = (AudioManager)cordova.getActivity().getBaseContext().getSystemService(Context.AUDIO_SERVICE);
+            this.focusListener = new OnAudioFocusChangeListener() {
+                {
+                    int result = audioManager.requestAudioFocus(this,
+                        AudioManager.STREAM_MUSIC,
+                        AudioManager.AUDIOFOCUS_GAIN);
+
+                    if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                        onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS);
+                        //sendFocusEvent(AudioManager.AUDIOFOCUS_LOSS);
+                    }
+                }
+
+                public void onAudioFocusChange (int focusChange) {
+                    if (focusChange == AudioManager.AUDIOFOCUS_LOSS) {
+                        for (AudioPlayer audio : players.values()) {
+                            if (audio.getState() == AudioPlayer.STATE.MEDIA_RUNNING.ordinal()) {
+                                audio.pausePlaying();
+                            }
+                        }
+                    }
+                }
+
+                public void abandonFocus() {
+                    if (audioManager != null) {
+                        audioManager.abandonAudioFocus(this);
+                        audioManager = null;
+                    }
+                }
+
+                public void onDestroy() {
+                    abandonFocus();
+                }
+            };*/
+
+            /*private class FocusListener implements AudioManager.OnAudioFocusChangeListener {
+                AudioManager audioManager;
+
+                public FocusListener (Context ctx) {
+                    this.audioManager = (AudioManager)ctx.getSystemService(Context.AUDIO_SERVICE);
+                    int result = this.audioManager.requestAudioFocus(this,
+                        AudioManager.STREAM_MUSIC,
+                        AudioManager.AUDIOFOCUS_GAIN);
+
+                    if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                        sendFocusEvent(AudioManager.AUDIOFOCUS_LOSS);
+                    }
+                }
+
+                @Override
+                public void onAudioFocusChange (int focusChange) {
+                    sendFocusEvent(focusChange);
+                }
+
+                public void abandonFocus() {
+                    if (this.audioManager != null) {
+                        this.audioManager.abandonAudioFocus(this);
+                        this.audioManager = null;
+                    }
+                }
+
+                public void onDestroy() {
+                    abandonFocus();
+                }
+            }*/
+
+            Context ctx = cordova.getActivity().getBaseContext();
+            this.focusListener = this.new FocusListener(ctx);
+        }
+
         origVolumeStream = cordova.getActivity().getVolumeControlStream();
         cordova.getActivity().setVolumeControlStream(AudioManager.STREAM_MUSIC);
     }
 
     private void onLastPlayerReleased() {
+        removeMusicReceiver();
+
         if (origVolumeStream != -1) {
             cordova.getActivity().setVolumeControlStream(origVolumeStream);
             origVolumeStream = -1;
