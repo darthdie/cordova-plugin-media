@@ -87,6 +87,9 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
     private boolean prepareOnly = true;     // playback after file prepare flag
     private int seekOnPrepared = 0;     // seek to this location once media is prepared
 
+    private float volume;
+    private float origVolume;
+
     /**
      * Constructor.
      *
@@ -98,6 +101,7 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
         this.id = id;
         this.audioFile = file;
         this.recorder = new MediaRecorder();
+        this.volume = 1.0f;
 
         if (Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
             this.tempFile = Environment.getExternalStorageDirectory().getAbsolutePath() + "/tmprecording.3gp";
@@ -311,6 +315,19 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
         }
     }
 
+    public void duckVolume() {
+        this.origVolume = this.volume;
+
+        this.setVolume(Math.max(0, Math.min(1, this.volume * 0.5f)));
+    }
+
+    public void unduckVolume() {
+        if(this.origVolume > -1) {
+            this.setVolume(this.origVolume);
+            this.origVolume = -1;
+        }
+    }
+
     /**
       * Get the duration of the audio file.
       *
@@ -438,6 +455,7 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
      * @param volume
      */
     public void setVolume(float volume) {
+        this.volume = volume;
         this.player.setVolume(volume, volume);
     }
 

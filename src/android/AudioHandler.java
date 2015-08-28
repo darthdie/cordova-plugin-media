@@ -84,6 +84,16 @@ public class AudioHandler extends CordovaPlugin {
                     }
                 }
             }
+            else if (focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK) {
+                for (AudioPlayer audio : players.values()) {
+                    audio.duckVolume();
+                }
+            }
+            else if (focusChange == AudioManager.AUDIOFOCUS_GAIN) {
+                for (AudioPlayer audio : players.values()) {
+                    audio.unduckVolume();
+                }
+            }
         }
 
         public void abandonFocus() {
