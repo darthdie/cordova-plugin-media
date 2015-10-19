@@ -183,8 +183,9 @@ public class AudioHandler extends CordovaPlugin {
         }
         else if (action.equals("create")) {
             String id = args.getString(0);
-            String src = FileHelper.stripFileProtocol(args.getString(1));
-            getOrCreatePlayer(id, src);
+            //String src = FileHelper.stripFileProtocol(args.getString(1));
+            CreateOptions opts = new CreateOptions(cordova.getActivity().getApplicationContext(), args.optJSONObject(1));
+            getOrCreatePlayer(id, opts);//src);
         }
         else if (action.equals("release")) {
             boolean b = this.release(args.getString(0));
@@ -283,15 +284,17 @@ public class AudioHandler extends CordovaPlugin {
     // LOCAL METHODS
     //--------------------------------------------------------------------------
 
-    private AudioPlayer getOrCreatePlayer(String id, String file) {
+    private AudioPlayer getOrCreatePlayer(String id, CreateOptions options) {
         AudioPlayer ret = players.get(id);
         if (ret == null) {
             if (players.isEmpty()) {
                 onFirstPlayerCreated();
             }
-            ret = new AudioPlayer(this, id, file);
+
+            ret = new AudioPlayer(this, id, options);
             players.put(id, ret);
         }
+
         return ret;
     }
 
@@ -317,8 +320,8 @@ public class AudioHandler extends CordovaPlugin {
      * @param file				The name of the file
      */
     public void startRecordingAudio(String id, String file) {
-        AudioPlayer audio = getOrCreatePlayer(id, file);
-        audio.startRecording(file);
+        //AudioPlayer audio = getOrCreatePlayer(id, file);
+        //audio.startRecording(file);
     }
 
     /**
@@ -338,7 +341,7 @@ public class AudioHandler extends CordovaPlugin {
      * @param file				The name of the audio file.
      */
     public void startPlayingAudio(String id, String file) {
-        AudioPlayer audio = getOrCreatePlayer(id, file);
+        AudioPlayer audio = getOrCreatePlayer(id, null);
         audio.startPlaying(file);
     }
 
@@ -396,7 +399,7 @@ public class AudioHandler extends CordovaPlugin {
      * @return					The duration in msec.
      */
     public float getDurationAudio(String id, String file) {
-        AudioPlayer audio = getOrCreatePlayer(id, file);
+        AudioPlayer audio = getOrCreatePlayer(id, null);
         return audio.getDuration(file);
     }
 

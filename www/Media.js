@@ -37,17 +37,18 @@ var mediaObjects = {};
  * @param statusCallback        The callback to be called when media status has changed.
  *                                  statusCallback(int statusCode) - OPTIONAL
  */
-var Media = function(src, successCallback, errorCallback, statusCallback) {
-    argscheck.checkArgs('sFFF', 'Media', arguments);
+var Media = function(options, successCallback, errorCallback, statusCallback) {
+    argscheck.checkArgs('oFFF', 'Media', arguments);
     this.id = utils.createUUID();
     mediaObjects[this.id] = this;
-    this.src = src;
+    this.src = options.source;
+    this.options = options;
     this.successCallback = successCallback;
     this.errorCallback = errorCallback;
     this.statusCallback = statusCallback;
     this._duration = -1;
     this._position = -1;
-    exec(null, this.errorCallback, "Media", "create", [this.id, this.src]);
+    exec(null, this.errorCallback, "Media", "create", [this.id, this.options]);
 };
 
 // Media messages
