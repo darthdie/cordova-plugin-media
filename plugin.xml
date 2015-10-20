@@ -55,11 +55,26 @@ id="cordova-plugin-media"
             <uses-permission android:name="android.permission.READ_PHONE_STATE" />
         </config-file>
 
+        <config-file target="AndroidManifest.xml" parent="/manifest/application">
+            <receiver
+                android:name="org.apache.cordova.media.MediaNotification"
+                android:exported="false">
+                <intent-filter>
+                    <action android:name="org.apache.cordova.media.PLAY" />
+                    <action android:name="org.apache.cordova.media.PAUSE" />
+                    <action android:name="org.apache.cordova.media.REWIND" />
+                    <action android:name="org.apache.cordova.media.FORWARD" />
+                </intent-filter>
+            </receiver>
+
+        </config-file>
+
         <source-file src="src/android/AudioHandler.java" target-dir="src/org/apache/cordova/media" />
         <source-file src="src/android/AudioPlayer.java" target-dir="src/org/apache/cordova/media" />
         <source-file src="src/android/FileHelper.java" target-dir="src/org/apache/cordova/media" />
         <source-file src="src/android/CreateOptions.java" target-dir="src/org/apache/cordova/media" />
         <source-file src="src/android/AssetUtil.java" target-dir="src/org/apache/cordova/media" />
+        <source-file src="src/android/MediaNotification.java" target-dir="src/org/apache/cordova/media" />
      </platform>
 
      <!-- amazon-fireos -->
@@ -82,6 +97,7 @@ id="cordova-plugin-media"
         <source-file src="src/android/FileHelper.java" target-dir="src/org/apache/cordova/media" />
         <source-file src="src/android/CreateOptions.java" target-dir="src/org/apache/cordova/media" />
         <source-file src="src/android/AssetUtil.java" target-dir="src/org/apache/cordova/media" />
+        <source-file src="src/android/MediaNotification.java" target-dir="src/org/apache/cordova/media" />
      </platform>
 
 

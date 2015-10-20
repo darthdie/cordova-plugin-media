@@ -38,6 +38,10 @@ import org.apache.cordova.PluginResult;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.apache.cordova.CordovaInterface;
+import org.apache.cordova.CordovaWebView;
+
+import android.os.Bundle;
 
 import java.util.HashMap;
 
@@ -109,6 +113,8 @@ public class AudioHandler extends CordovaPlugin {
     }
 
     private FocusListener focusListener;
+
+    private BroadcastReceiver myReceiver = null;
 
     /**
      * Constructor.
@@ -228,6 +234,13 @@ public class AudioHandler extends CordovaPlugin {
                 this.cordova.getActivity().unregisterReceiver(this.musicReceiver);
                 this.musicReceiver = null;
             } catch (Exception e) { }
+        }
+
+        if(this.myReceiver != null) {
+            try {
+                this.cordova.getActivity().unregisterReceiver(this.myReceiver);
+                this.myReceiver = null;
+            } catch(Exception e) {}
         }
 
         if (this.focusListener != null) {
@@ -473,6 +486,30 @@ public class AudioHandler extends CordovaPlugin {
             };
 
             cordova.getActivity().registerReceiver(this.musicReceiver, intentFilter);
+        }
+
+        if(myReceiver == null) {
+            Log.d("MediaNotification", "Initiing");
+            myReceiver = new BroadcastReceiver() {
+                @Override
+                 public void onReceive(final Context context, final Intent intent) {
+                     final String action = intent.getAction();
+                     if(action != MediaNotification.ACTION_PAUSE + ".real") {
+                         return;
+                     }
+                     
+                     Bundle bundle  = intent.getExtras();
+                     String id = bundle.getString("id");
+                     Log.d("MediaNotification", "Received intent with action " + action + " - for id: " + id);
+                 }
+            };
+
+            IntentFilter intentFilter2 = new IntentFilter();
+            intentFilter2.addAction(MediaNotification.ACTION_PLAY + ".real");
+            intentFilter2.addAction(MediaNotification.ACTION_PAUSE + ".real");
+            intentFilter2.addAction(MediaNotification.ACTION_REWIND + ".real");
+            intentFilter2.addAction(MediaNotification.ACTION_FORWARD + ".real");
+            cordova.getActivity().registerReceiver(this.myReceiver, intentFilter2);
         }
 
         if (this.focusListener == null) {

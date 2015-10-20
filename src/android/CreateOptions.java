@@ -53,6 +53,10 @@ public class CreateOptions {
         }
     }
 
+    public Context getContext() {
+        return context;
+    }
+
     public String getSourcePath() {
         return options.optString("source", "");
     }

@@ -24,12 +24,8 @@ import android.media.MediaPlayer.OnCompletionListener;
 import android.media.MediaPlayer.OnErrorListener;
 import android.media.MediaPlayer.OnPreparedListener;
 import android.media.MediaRecorder;
-import android.media.session.PlaybackState;
 import android.os.Environment;
 import android.util.Log;
-
-import android.app.Notification;
-import android.app.NotificationManager;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -37,16 +33,6 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-
-import android.app.PendingIntent;
-import android.media.session.MediaSession;
-import android.media.MediaMetadata;
-import android.content.Context;
-import android.content.Intent;
-import android.graphics.Color;
-import android.graphics.Bitmap;
-
-import android.view.KeyEvent;
 
 /**
  * This class implements the audio playback and recording capabilities used by Cordova.
@@ -73,12 +59,6 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
 
     private static final String LOG_TAG = "AudioPlayer";
 
-    private static final String ACTION_TOGGLE_PLAYBACK = "org.apache.cordova.media.TOGGLE_PLAYBACK";
-    private static final String ACTION_PLAY = "org.apache.cordova.media.PLAY";
-    private static final String ACTION_PAUSE = "org.apache.cordova.media.PAUSE";
-    private static final String ACTION_REWIND = "org.apache.cordova.media.REWIND";
-    private static final String ACTION_FORWARD = "org.apache.cordova.media.FORWARD";
-
     // AudioPlayer message ids
     private static int MEDIA_STATE = 1;
     private static int MEDIA_DURATION = 2;
@@ -104,8 +84,6 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
     private String tempFile = null;         // Temporary recording file name
 
     private MediaPlayer player = null;      // Audio player object
-    private Notification notification = null;
-    private MediaSession mSession  = null;
 
     private boolean prepareOnly = true;     // playback after file prepare flag
     private int seekOnPrepared = 0;     // seek to this location once media is prepared
@@ -114,66 +92,7 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
     private float origVolume;
 
     private CreateOptions options;
-    private int mState = PlaybackState.STATE_NONE;
-    //private PlaybackState mPlaybackState;
-
-    public class MediaControlReceiver extends BroadcastReceiver {
-        /*public static final String ACTION_PLAY = "de.appplant.action_play";
-        public static final String ACTION_PAUSE = "de.appplant.action_pause";
-        public static final String ACTION_REWIND = "de.appplant.action_rewind";
-        public static final String ACTION_FAST_FORWARD = "de.appplant.action_fast_forward";
-        public static final String ACTION_NEXT = "de.appplant.action_next";
-        public static final String ACTION_PREVIOUS = "de.appplant.action_previous";
-        public static final String ACTION_STOP = "de.appplant.action_stop";*/
-
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            Bundle bundle  = intent.getExtras();
-            Options options;
-
-            try {
-                String data = bundle.getString("NOTIFICATION_OPTIONS");
-                JSONObject dict = new JSONObject(data);
-
-                options = new Options(context).parse(dict);
-            } catch (JSONException e) {
-                e.printStackTrace();
-                return;
-            }
-
-            if (options == null) {
-                return;
-            }
-
-            Builder builder = new Builder(options);
-            Notification notification = buildNotification(builder);
-
-            final String action = intent.getAction();
-
-            if(action.equals(ACTION_TOGGLE_PLAY)) {
-                pausePlaying();
-                //LocalNotification.fireEvent("mediapause", notification);
-            }
-            else if(action.equals(ACTION_PLAY)) {
-                startPlaying(audioFile);
-                //LocalNotification.fireEvent("mediaplay", notification);
-            }
-            else if(action.equals(ACTION_REWIND)) {
-                //LocalNotification.fireEvent("mediarewind", notification);
-            }
-            else if(action.equals(ACTION_FAST_FORWARD)) {
-                //LocalNotification.fireEvent("mediafastforward", notification);
-            }
-        }
-
-        public Notification buildNotification (Builder builder) {
-            return builder
-                    .setTriggerReceiver(TriggerReceiver.class)
-                    .setClickActivity(ClickActivity.class)
-                    .setClearReceiver(ClearReceiver.class)
-                    .build();
-        }
-    }
+    private MediaNotification mNotification;
 
     /**
      * Constructor.
@@ -197,6 +116,14 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
 
     }
 
+    public CreateOptions getOptions() {
+        return this.options;
+    }
+
+    public String getId() {
+        return this.id;
+    }
+
     /**
      * Destroy player and stop audio playing or recording.
      */
@@ -211,8 +138,8 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
             this.player.release();
             this.player = null;
 
-            this.mSession.release();
-            this.mSession = null;
+            this.mNotification.stop();
+            this.mNotification = null;
         }
         if (this.recorder != null) {
             this.stopRecording();
@@ -298,35 +225,6 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
         }
     }
 
-    private void updatePlaybackState() {
-        long position = PlaybackState.PLAYBACK_POSITION_UNKNOWN;
-
-        if (this.player != null && this.player.isPlaying()) {
-            position = this.player.getCurrentPosition();
-        }
-
-        PlaybackState.Builder stateBuilder = new PlaybackState.Builder()
-                .setActions(getAvailableActions());
-        stateBuilder.setState(mState, position, 1.0f);
-
-        //this.mPlaybackState = stateBuilder.build();
-        this.mSession.setPlaybackState(stateBuilder.build());
-    }
-
-    private long getAvailableActions() {
-        long actions = PlaybackState.ACTION_PLAY |
-                PlaybackState.ACTION_PLAY_FROM_MEDIA_ID |
-                PlaybackState.ACTION_PLAY_FROM_SEARCH |
-                PlaybackState.ACTION_SKIP_TO_PREVIOUS |
-                PlaybackState.ACTION_SKIP_TO_NEXT;
-
-        if (mState == PlaybackState.STATE_PLAYING) {
-            actions |= PlaybackState.ACTION_PAUSE;
-        }
-
-        return actions;
-    }
-
     //==========================================================================
     // Playback
     //==========================================================================
@@ -342,8 +240,7 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
             this.setState(STATE.MEDIA_RUNNING);
             this.seekOnPrepared = 0; //insures this is always reset
 
-            this.mState = PlaybackState.STATE_PLAYING;
-            this.updatePlaybackState();
+            this.mNotification.updateState();
         } else {
             this.prepareOnly = false;
         }
@@ -372,8 +269,7 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
             this.player.pause();
             this.setState(STATE.MEDIA_PAUSED);
 
-            this.mState = PlaybackState.STATE_PAUSED;
-            this.updatePlaybackState();
+            this.mNotification.updateState();
         }
         else {
             Log.d(LOG_TAG, "AudioPlayer Error: pausePlaying() called during invalid state: " + this.state.ordinal());
@@ -391,8 +287,7 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
             Log.d(LOG_TAG, "stopPlaying is calling stopped");
             this.setState(STATE.MEDIA_STOPPED);
 
-            this.mState = PlaybackState.STATE_STOPPED;
-            this.updatePlaybackState();
+            this.mNotification.updateState();
         }
         else {
             Log.d(LOG_TAG, "AudioPlayer Error: stopPlaying() called during invalid state: " + this.state.ordinal());
@@ -409,8 +304,7 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
         Log.d(LOG_TAG, "on completion is calling stopped");
         this.setState(STATE.MEDIA_STOPPED);
 
-        this.mState = PlaybackState.STATE_STOPPED;
-        this.updatePlaybackState();
+        this.mNotification.updateState();
     }
 
     /**
@@ -504,14 +398,11 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
             this.player.start();
             this.setState(STATE.MEDIA_RUNNING);
             this.seekOnPrepared = 0; //reset only when played
-
-            this.mState = PlaybackState.STATE_PLAYING;
         } else {
             this.setState(STATE.MEDIA_STARTING);
-            this.mState = PlaybackState.STATE_PAUSED;
         }
 
-        this.updatePlaybackState();
+        this.mNotification.updateState();
 
         // Save off duration
         this.duration = getDurationInSeconds();
@@ -545,7 +436,7 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
         // TODO: Not sure if this needs to be sent?
         this.player.stop();
         this.player.release();
-        this.mSession.release();
+        this.mNotification.stop();
 
         // Send error notification to JavaScript
         sendErrorStatus(arg1);
@@ -627,79 +518,8 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
                     if (this.player == null) {
                         this.player = new MediaPlayer();
 
-                        c
-
-                        Bitmap artwork = this.options.getIconBitmap();
-
-                        this.mSession = new MediaSession(ctx, "Satchel Media Session");
-                        this.mSession.setMetadata(new MediaMetadata.Builder()
-                            .putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, artwork)
-                            .putString(MediaMetadata.METADATA_KEY_ARTIST, this.options.getPodcastName())
-                            //.putString(MediaMetadata.METADATA_KEY_ALBUM, "Dark Side of the Moon")
-                            .putString(MediaMetadata.METADATA_KEY_TITLE, this.options.getEpisodeName())
-                            .build());
-
-                        this.mSession.setActive(true);
-                        this.mSession.setFlags(MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS | MediaSession.FLAG_HANDLES_MEDIA_BUTTONS);
-
-                        // Attach a new Callback to receive MediaSession updates
-                        this.mSession.setCallback(new MediaSession.Callback() {
-                            public boolean onMediaButtonEvent(Intent mediaButtonIntent) {
-                                if(mSession == null || !Intent.ACTION_MEDIA_BUTTON.equals(mediaButtonIntent.getAction())) {
-                                    return false;
-                                }
-
-                                KeyEvent ke = mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
-                                if (ke == null || ke.getAction() != KeyEvent.ACTION_DOWN) {
-                                    return false;
-                                }
-
-                                //PlaybackState state = mPlaybackState;
-                                //long validActions = state == null ? 0 : state.getActions();
-
-                                if(ke.getKeyCode() == KeyEvent.KEYCODE_MEDIA_PLAY) {
-                                    startPlaying(audioFile);
-                                    return true;
-                                }
-
-                                if(ke.getKeyCode() == KeyEvent.KEYCODE_MEDIA_PAUSE) {
-                                    pausePlaying();
-                                    return true;
-                                }
-
-                                return false;
-                            }
-                        });
-
-                        /*PlaybackState state = new PlaybackState.Builder()
-                        .setActions(
-                                PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PLAY_PAUSE |
-                                PlaybackState.ACTION_PLAY_FROM_MEDIA_ID | PlaybackState.ACTION_PAUSE |
-                                PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS)
-                        .setState(PlaybackState.STATE_PAUSED, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 0, SystemClock.elapsedRealtime())
-                        .build();
-
-                        this.mSession.setPlaybackState(state);*/
-
-                        this.mState = PlaybackState.STATE_BUFFERING;
-                        this.updatePlaybackState();
-
-                        this.notification = new Notification.Builder(ctx)
-                             .setShowWhen(false)
-                             .setStyle(new Notification.MediaStyle()
-                                 .setMediaSession(this.mSession.getSessionToken())
-                                 .setShowActionsInCompactView(0, 1, 2))
-                             .setColor(Color.parseColor("#303030"))
-                             .setSmallIcon(this.options.getSmallIcon())
-                             .setLargeIcon(artwork)
-                             .setContentText(this.options.getEpisodeName())
-                             .setContentTitle(this.options.getPodcastName())
-                             .addAction(android.R.drawable.ic_media_rew, "prev", retreivePlaybackAction(4))
-                             .addAction(android.R.drawable.ic_media_play, "play", retreivePlaybackAction(1))
-                             .addAction(android.R.drawable.ic_media_ff, "next", retreivePlaybackAction(3))
-                             .build();
-
-                         ((NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE)).notify(1, this.notification);
+                        this.mNotification = new MediaNotification(this);
+                        this.mNotification.show();
                     }
                     try {
                         this.loadAudioFile(file);
@@ -740,42 +560,6 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
             }
         }
         return false;
-    }
-
-    private PendingIntent retreivePlaybackAction(int which) {
-        Intent action;
-        PendingIntent pendingIntent;
-        PendingIntent.getService
-        //final ComponentName serviceName = new ComponentName(this, MediaControlReceiver.class);
-        switch (which) {
-            case 1:
-                // Play
-                action = new Intent(ACTION_PLAY);
-                //action.setComponent(serviceName);
-                pendingIntent = PendingIntent.getService(ctx, 1, action, 0);
-                return pendingIntent;
-            case 2:
-                //Pause
-                action = new Intent(ACTION_PAUSE);
-                //action.setComponent(serviceName);
-                pendingIntent = PendingIntent.getService(ctx, 1, action, 0);
-                return pendingIntent;
-            case 3:
-                // Skip tracks
-                action = new Intent(ACTION_NEXT);
-                //action.setComponent(serviceName);
-                pendingIntent = PendingIntent.getService(ctx, 3, action, 0);
-                return pendingIntent;
-            case 4:
-                // Previous tracks
-                action = new Intent(ACTION_PREV);
-                //action.setComponent(serviceName);
-                pendingIntent = PendingIntent.getService(ctx, 4, action, 0);
-                return pendingIntent;
-            default:
-                break;
-        }
-        return null;
     }
 
     /**
