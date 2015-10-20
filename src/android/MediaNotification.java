@@ -39,6 +39,8 @@ import android.util.Log;
 
 import java.util.Random;
 
+import android.support.v4.content.LocalBroadcastManager;
+
 public class MediaNotification extends BroadcastReceiver {
     private static final String TAG = "MediaNotification";
 
@@ -138,10 +140,12 @@ public class MediaNotification extends BroadcastReceiver {
              .setVisibility(Notification.VISIBILITY_PUBLIC)
              .setContentText(this.options.getEpisodeName())
              .setContentTitle(this.options.getPodcastName())
-             .addAction(android.R.drawable.ic_media_rew, "prev", retrievePlaybackAction(ACTION_REWIND))
+             .setProgress(100, 33, false)
+             .setOngoing(false)
+             .addAction(this.options.getMediaBackIcon(), "prev", retrievePlaybackAction(ACTION_REWIND))
              //.addAction(android.R.drawable.ic_media_play, "play", retrievePlaybackAction(ACTION_PLAY))
              .addAction(mPlayPauseAction)
-             .addAction(android.R.drawable.ic_media_ff, "next", retrievePlaybackAction(ACTION_FORWARD));
+             .addAction(this.options.getMediaForwardIcon(), "next", retrievePlaybackAction(ACTION_FORWARD));
 
          mNotificationManager.notify(1, mNotificationBuilder.build());
     }
@@ -152,10 +156,10 @@ public class MediaNotification extends BroadcastReceiver {
         int playPauseIcon;
         if (this.mState == PlaybackState.STATE_PLAYING) {
             playPauseLabel = "Pause";
-            playPauseIcon = android.R.drawable.ic_media_pause;
+            playPauseIcon = this.options.getMediaPauseIcon();
         } else {
             playPauseLabel = "Play";
-            playPauseIcon = android.R.drawable.ic_media_play;
+            playPauseIcon = this.options.getMediaPlayIcon();
         }
 
         if (mPlayPauseAction == null) {
@@ -165,6 +169,15 @@ public class MediaNotification extends BroadcastReceiver {
             mPlayPauseAction.title = playPauseLabel;
             mPlayPauseAction.actionIntent = retrievePlaybackAction(ACTION_PAUSE);
         }
+    }
+
+    private PendingIntent retrievePlaybackAction(String action) {
+        Intent intent = new Intent(this.context, MediaNotification.class);
+        intent.setAction(action);
+        intent.putExtra("id", this.player.getId());
+
+        int requestCode = new Random().nextInt();
+        return PendingIntent.getBroadcast(this.context, requestCode, intent, PendingIntent.FLAG_CANCEL_CURRENT);
     }
 
     public void updateState() {
@@ -192,6 +205,10 @@ public class MediaNotification extends BroadcastReceiver {
 
         if (mState == PlaybackState.STATE_PLAYING) {
             position = this.player.getCurrentPosition();
+            mNotificationBuilder.setOngoing(true);
+        }
+        else {
+            mNotificationBuilder.setOngoing(false);
         }
 
         PlaybackState.Builder stateBuilder = new PlaybackState.Builder()
@@ -219,45 +236,16 @@ public class MediaNotification extends BroadcastReceiver {
         return actions;
     }
 
-    private PendingIntent retrievePlaybackAction(String action) {
-        Intent intent = new Intent(this.context, MediaNotification.class);
-        intent.setAction(action);
-        intent.putExtra("id", this.player.getId());
-
-        int requestCode = new Random().nextInt();
-        return PendingIntent.getBroadcast(this.context, requestCode, intent, PendingIntent.FLAG_CANCEL_CURRENT);
-    }
-
     @Override
     public void onReceive(Context context, Intent intent) {
-        Log.d("MediaNotification", "Received intent");
         final String action = intent.getAction();
 
-        if (ACTION_PAUSE.equals(action)) {
+        Log.d("MediaNotification", "Received intent " + action);
+
+        if (ACTION_PAUSE.equals(action) || ACTION_FORWARD.equals(action) || ACTION_REWIND.equals(action)) {
             intent.setAction(intent.getAction() + ".real");
-            context.sendBroadcast(intent);
+            LocalBroadcastManager.getInstance(context).sendBroadcast(intent);
         }
-        /*
-
-        Log.d(TAG, "Received intent with action " + action);
-
-        if (ACTION_PAUSE.equals(action)) {
-            if(mState == PlaybackState.STATE_PLAYING) {
-                this.player.pausePlaying();
-            }
-            else {
-                this.player.startPlaying(this.options.getSourcePath());
-            }
-            //this.player.pausePlaying();
-            //mTransportControls.pause();
-        } else if (ACTION_PLAY.equals(action)) {
-            //this.player.startPlaying(this.options.getSourcePath());
-            //mTransportControls.play();
-        } else if (ACTION_FORWARD.equals(action)) {
-            //mTransportControls.skipToNext();
-        } else if (ACTION_REWIND.equals(action)) {
-            //mTransportControls.skipToPrevious();
-        }*/
     }
 
     public void stop() {

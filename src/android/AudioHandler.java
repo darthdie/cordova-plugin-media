@@ -41,6 +41,8 @@ import org.json.JSONObject;
 import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.CordovaWebView;
 
+import android.support.v4.content.LocalBroadcastManager;
+
 import android.os.Bundle;
 
 import java.util.HashMap;
@@ -238,7 +240,7 @@ public class AudioHandler extends CordovaPlugin {
 
         if(this.myReceiver != null) {
             try {
-                this.cordova.getActivity().unregisterReceiver(this.myReceiver);
+                LocalBroadcastManager.getInstance(cordova.getActivity().getApplicationContext()).unregisterReceiver(this.myReceiver);
                 this.myReceiver = null;
             } catch(Exception e) {}
         }
@@ -494,13 +496,34 @@ public class AudioHandler extends CordovaPlugin {
                 @Override
                  public void onReceive(final Context context, final Intent intent) {
                      final String action = intent.getAction();
-                     if(action != MediaNotification.ACTION_PAUSE + ".real") {
-                         return;
-                     }
-                     
+
                      Bundle bundle  = intent.getExtras();
                      String id = bundle.getString("id");
+
+                     AudioPlayer audio = players.get(id);
+                     if(audio == null) {
+                         return;
+                     }
+
                      Log.d("MediaNotification", "Received intent with action " + action + " - for id: " + id);
+
+                     if((MediaNotification.ACTION_PAUSE + ".real").equals(action)) {
+                         if(audio.getState() == AudioPlayer.STATE.MEDIA_RUNNING.ordinal()) {
+                             audio.pausePlaying();
+                         }
+                         else {
+                             audio.startPlaying(audio.getOptions().getSourcePath());
+                         }
+                     }
+                     else if((MediaNotification.ACTION_REWIND + ".real").equals(action)) {
+                         int pos = (int)(audio.getCurrentPosition() - 10000);
+
+                         audio.seekToPlaying(pos);
+                     }
+                     else if((MediaNotification.ACTION_FORWARD + ".real").equals(action)) {
+                         int pos = (int)(audio.getCurrentPosition() + 30000);
+                         audio.seekToPlaying(pos);
+                     }
                  }
             };
 
@@ -509,7 +532,8 @@ public class AudioHandler extends CordovaPlugin {
             intentFilter2.addAction(MediaNotification.ACTION_PAUSE + ".real");
             intentFilter2.addAction(MediaNotification.ACTION_REWIND + ".real");
             intentFilter2.addAction(MediaNotification.ACTION_FORWARD + ".real");
-            cordova.getActivity().registerReceiver(this.myReceiver, intentFilter2);
+            //cordova.getActivity().registerReceiver(this.myReceiver, intentFilter2);
+            LocalBroadcastManager.getInstance(cordova.getActivity().getApplicationContext()).registerReceiver(this.myReceiver, intentFilter2);
         }
 
         if (this.focusListener == null) {
