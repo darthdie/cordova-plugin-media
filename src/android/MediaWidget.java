@@ -17,7 +17,7 @@
        under the License.
 */
 
-package org.apache.cordova.media;
+package org.apache.cordova.media.widget;
 
 import android.app.PendingIntent;
 import android.app.Service;
@@ -30,64 +30,31 @@ import android.net.Uri;
 import android.os.IBinder;
 import android.widget.RemoteViews;
 
+import org.apache.cordova.CordovaInterface;
+import org.apache.cordova.media.AudioHandler;
+
+import android.util.Log;
+
 public class MediaWidget extends AppWidgetProvider {
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
-        // To prevent any ANR timeouts, we perform the update in a service
+        Log.d("MediaNotification", "On update - widget");
+        RemoteViews updateViews = buildUpdate(context);
 
-        context.startService(new Intent(context, UpdateService.class));
+        // Push update for this widget to the home screen
+        ComponentName thisWidget = new ComponentName(context, MediaWidget.class);
+        AppWidgetManager manager = AppWidgetManager.getInstance(context);
+
+        manager.updateAppWidget(thisWidget, updateViews);
     }
 
-    public static class UpdateService extends Service {
-        @Override
-        public void onStart(Intent intent, int startId) {
-            // Build the widget update for today
-            RemoteViews updateViews = buildUpdate(this);
+    public RemoteViews buildUpdate(Context context) {
+        int layoutId = context.getResources().getIdentifier("media_widget_layout", "layout", context.getPackageName());
+        RemoteViews updateViews = new RemoteViews(context.getPackageName(), layoutId);
 
-            // Push update for this widget to the home screen
-            ComponentName thisWidget = new ComponentName(this, MovieSearchWidget.class);
-            AppWidgetManager manager = AppWidgetManager.getInstance(this);
+        int movieNameId = context.getResources().getIdentifier("movie_name", "id", context.getPackageName());
+        updateViews.setTextViewText(movieNameId, "HAI");
 
-            manager.updateAppWidget(thisWidget, updateViews);
-        }
-
-        public RemoteViews buildUpdate(Context context) {
-            /*Movie movie = movieSeeker.findLatest();
-
-            String imdbUrl = IMDB_BASE_URL + movie.imdbId;
-
-            // Build an update that holds the updated widget contents
-            RemoteViews updateViews = new RemoteViews(context.getPackageName(), R.layout.widget_layout);
-
-            updateViews.setTextViewText(R.id.app_name, getString(R.string.app_name));
-
-            updateViews.setTextViewText(R.id.movie_name, movie.name);
-
-            Intent intent = new Intent();
-
-            intent.setAction("android.intent.action.VIEW");
-
-            intent.addCategory("android.intent.category.BROWSABLE");
-
-            intent.setData(Uri.parse(imdbUrl));
-
-            PendingIntent pendingIntent =
-
-            PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
-
-            updateViews.setOnClickPendingIntent(R.id.movie_name, pendingIntent);*/
-
-            RemoteViews updateViews = new RemoteViews(context.getPackageName(), R.layout.widget_layout);
-            updateViews.setTextViewText(R.id.app_name, getString(R.string.app_name));
-
-            updateViews.setTextViewText(R.id.movie_name, "HAI");
-
-            return updateViews;
-        }
-
-        @Override
-        public IBinder onBind(Intent intent) {
-            return null;// We don't need to bind to this service
-        }
+        return updateViews;
     }
 }

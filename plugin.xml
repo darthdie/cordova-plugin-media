@@ -42,9 +42,9 @@ id="cordova-plugin-media"
 
     <!-- android -->
     <platform name="android">
-        <resource-file src="res/android/media_widget.xml" target="res/xml/media_widget.xml" />
-        <resource-file src="res/android/media_widget_layout.xml" target="res/layout/media_widget_layout.xml" />
-        <resource-file src="res/android/media_widget_styles.xml" target="res/values/media_widget_styles.xml" />
+        <source-file src="res/android/media_widget.xml" target-dir="res/xml" />
+        <source-file src="res/android/media_widget_layout.xml" target-dir="res/layout" />
+        <source-file src="res/android/media_widget_styles.xml" target-dir="res/values" />
 
         <config-file target="res/xml/config.xml" parent="/*">
             <feature name="Media" >
@@ -71,7 +71,7 @@ id="cordova-plugin-media"
                 </intent-filter>
             </receiver>
 
-            <receiver android:name=".widget.MediaWidget" android:label="@string/widget_name">
+            <receiver android:name="org.apache.cordova.media.widget.MediaWidget" android:label="@string/widget_name">
                 <intent-filter>
                     <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 </intent-filter>

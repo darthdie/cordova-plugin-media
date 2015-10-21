@@ -7,7 +7,7 @@
     android:focusable="true"
     style="@style/WidgetBackground">
 
-    <TextView
+    <!--<TextView
 
     android:id="@+id/app_name"
 
@@ -49,6 +49,16 @@
 
     android:fadingEdge="vertical"
 
-    style="@style/Text.Movie" />
+    style="@style/Text.Movie" />-->
+    <TextView
+    android:id="@+id/movie_name"
+    style="@style/Text.Movie"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_gravity="center"
+    android:gravity="center_horizontal|center_vertical"
+    android:layout_margin="4dip"
+    >
+</TextView>
 
 </RelativeLayout>
