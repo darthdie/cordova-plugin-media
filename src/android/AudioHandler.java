@@ -77,7 +77,7 @@ public class AudioHandler extends CordovaPlugin {
 
         @Override
         public void onAudioFocusChange (int focusChange) {
-            if (focusChange == AudioManager.AUDIOFOCUS_LOSS) {
+            if (focusChange == AudioManager.AUDIOFOCUS_LOSS || focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
                 for (AudioPlayer audio : players.values()) {
                     if (audio.getState() == AudioPlayer.STATE.MEDIA_RUNNING.ordinal()) {
                         audio.pausePlaying();
