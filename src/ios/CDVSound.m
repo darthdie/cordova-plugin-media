@@ -256,13 +256,13 @@
 -(void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSString *,id> *)change context:(void *)context {
 
     if(avPlayer != nil && object == avPlayer.currentItem && [keyPath isEqualToString:@"status"]) {
-        if(avPlayer.currentItem.status == AVPlayerStatusReadyToPlay) {
-            CMTime time = [avPlayer.currentItem currentTime];
+        if(avPlayer.currentItem.status == AVPlayerItemStatusReadyToPlay) {
+            CMTime time = [avPlayer.currentItem duration];
             double position = CMTimeGetSeconds(time);
             NSString *jsString = [NSString stringWithFormat:@"%@(\"%@\",%d,%.3f);\n%@(\"%@\",%d,%d);", @"cordova.require('cordova-plugin-media.Media').onStatus", self.currMediaId, MEDIA_DURATION, position, @"cordova.require('cordova-plugin-media.Media').onStatus", self.currMediaId, MEDIA_STATE, MEDIA_STARTING];
             [self.commandDelegate evalJs:jsString];
         }
-        else if(avPlayer.currentItem.status == AVPlayerStatusFailed) {
+        else if(avPlayer.currentItem.status == AVPlayerItemStatusFailed) {
             NSString *jsString = [NSString stringWithFormat:@"%@(\"%@\",%d,%@);", @"cordova.require('cordova-plugin-media.Media').onStatus", self.currMediaId, MEDIA_ERROR, [self createMediaErrorWithCode:MEDIA_ERR_NETWORK message:@"Error loading stream."]];
             [self.commandDelegate evalJs:jsString];
 
