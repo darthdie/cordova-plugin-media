@@ -77,6 +77,8 @@ public class AudioHandler extends CordovaPlugin {
 
         @Override
         public void onAudioFocusChange (int focusChange) {
+            Log.d("Satchel", "Focus change: " + focusChange);
+
             if (focusChange == AudioManager.AUDIOFOCUS_LOSS || focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
                 for (AudioPlayer audio : players.values()) {
                     if (audio.getState() == AudioPlayer.STATE.MEDIA_RUNNING.ordinal()) {
@@ -93,6 +95,13 @@ public class AudioHandler extends CordovaPlugin {
                 for (AudioPlayer audio : players.values()) {
                     audio.unduckVolume();
                 }
+            }
+            else if(focusChange == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                for (AudioPlayer audio : pausedForPhone) {
+                    audio.startPlaying(null);
+                }
+
+                pausedForPhone.clear();
             }
         }
 
@@ -251,7 +260,8 @@ public class AudioHandler extends CordovaPlugin {
      * @return              Object to stop propagation or null
      */
     public Object onMessage(String id, Object data) {
-
+        Log.d("Satchel", "Messaged received id: " + id);
+        Log.d("Satchel", "Messaged received data: " + data);
         // If phone message
         if (id.equals("telephone")) {
 
@@ -269,12 +279,12 @@ public class AudioHandler extends CordovaPlugin {
             }
 
             // If phone idle, then resume playing those players we paused
-            else if ("idle".equals(data)) {
+            /*else if ("idle".equals(data)) {
                 for (AudioPlayer audio : this.pausedForPhone) {
                     audio.startPlaying(null);
                 }
                 this.pausedForPhone.clear();
-            }
+            }*/
         }
         return null;
     }
