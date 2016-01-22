@@ -337,7 +337,6 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
       *                             -2=not allowed
       */
     public float getDuration(String file) {
-
         // Can't get duration of recording
         if (this.recorder != null) {
             return (-2); // not allowed
@@ -518,14 +517,15 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
                             } catch (Exception e) {
                                 sendErrorStatus(MEDIA_ERR_ABORTED);
                             }
+                            
                             return false;//we´re not ready yet
-                        } 
+                        }
                         else {
                            //reset the audio file
                             player.seekTo(0);
                             player.pause();
-                            return true; 
-                        } 
+                            return true;
+                        }
                     } else {
                         //reset the player
                         this.player.reset();
@@ -560,6 +560,7 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
             this.setMode(MODE.PLAY);
             this.setState(STATE.MEDIA_STARTING);
             this.player.setOnPreparedListener(this);
+            this.player.setOnErrorListener(this);
             this.player.prepareAsync();
         }
         else {
@@ -581,6 +582,7 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
             }
                 this.setState(STATE.MEDIA_STARTING);
                 this.player.setOnPreparedListener(this);
+                this.player.setOnErrorListener(this);
                 this.player.prepare();
 
                 // Get duration
