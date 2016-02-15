@@ -209,7 +209,7 @@ exports.defineAutoTests = function () {
                 //in case the statusChange callback is reached more than one time with the same status code.
                 //Some information about this kind of behaviour can be found at JIRA: CB-7099.
                 var context = this,
-                    mediaFile = 'http://cordova.apache.org/downloads/BlueZedEx.mp3',
+                    mediaFile = 'https://cordova.apache.org/downloads/BlueZedEx.mp3',
                     successCallback = function () { },
                     statusChange = function (statusCode) {
                         if (!context.done && statusCode == Media.MEDIA_RUNNING) {
@@ -238,7 +238,7 @@ exports.defineAutoTests = function () {
                 //in case the statusChange callback is reached more than one time with the same status code.
                 //Some information about this kind of behaviour can be found at JIRA: CB-7099.
                 var context = this,
-                    mediaFile = 'http://cordova.apache.org/downloads/BlueZedEx.mp3',
+                    mediaFile = 'https://cordova.apache.org/downloads/BlueZedEx.mp3',
                     successCallback = function () { },
                     statusChange = function (statusCode) {
                         if (!context.done && statusCode == Media.MEDIA_RUNNING) {
@@ -268,7 +268,7 @@ exports.defineAutoTests = function () {
                 //Some information about this kind of behaviour can be found at JIRA: CB-7099.
                 var context = this;
                 var resumed = false;
-                var mediaFile = 'http://cordova.apache.org/downloads/BlueZedEx.mp3';
+                var mediaFile = 'https://cordova.apache.org/downloads/BlueZedEx.mp3';
                 var successCallback = function () { };
                 var statusChange = function (statusCode) {
                     if (context.done) return;
@@ -293,7 +293,12 @@ exports.defineAutoTests = function () {
                     }
                 };
                 media = new Media(mediaFile, successCallback, failed.bind(self, done, 'media1 = new Media - Error creating Media object. Media file: ' + mediaFile, context), statusChange);
-                media.play();
+                
+                // CB-10535: Play after a few secs, to give allow enough buffering of media file before seeking
+                setTimeout(function() {
+                    media.play();
+                }, 4000);
+                
             }, ACTUAL_PLAYBACK_TEST_TIMEOUT);
 
             it("media.spec.21 should be able to seek through file", function (done) {
@@ -305,7 +310,7 @@ exports.defineAutoTests = function () {
                 //in case the statusChange callback is reached more than one time with the same status code.
                 //Some information about this kind of behaviour can be found at JIRA: CB-7099.
                 var context = this;
-                var mediaFile = 'http://cordova.apache.org/downloads/BlueZedEx.mp3';
+                var mediaFile = 'https://cordova.apache.org/downloads/BlueZedEx.mp3';
                 var successCallback = function () { };
                 var statusChange = function (statusCode) {
                     if (!context.done && statusCode == Media.MEDIA_RUNNING) {
@@ -321,7 +326,12 @@ exports.defineAutoTests = function () {
                     }
                 };
                 media = new Media(mediaFile, successCallback, failed.bind(self, done, 'media1 = new Media - Error creating Media object. Media file: ' + mediaFile, context), statusChange);
-                media.play();
+                
+                // CB-10535: Play after a few secs, to give allow enough buffering of media file before seeking
+                setTimeout(function() {
+                    media.play();
+                }, 4000);
+                
             }, ACTUAL_PLAYBACK_TEST_TIMEOUT);
         });
 
@@ -338,11 +348,13 @@ exports.defineAutoTests = function () {
                 pending();
                 return;
             }
-            var mediaFile = 'http://cordova.apache.org/downloads/BlueZedEx.mp3',
+            var mediaFile = 'https://cordova.apache.org/downloads/BlueZedEx.mp3',
                 mediaState = Media.MEDIA_STOPPED,
                 successCallback,
+                context = this,
                 flag = true,
                 statusChange = function (statusCode) {
+                    console.log("status code: " + statusCode);
                     if (statusCode == Media.MEDIA_RUNNING && flag) {
                         //flag variable used to ensure an extra security statement to ensure that the callback is processed only once,
                         //in case for some reason the statusChange callback is reached more than one time with the same status code.
@@ -355,15 +367,16 @@ exports.defineAutoTests = function () {
                                 media1.stop();
                                 media1.release();
                                 done();
-                            }, failed.bind(null, done, 'media1.getCurrentPosition - Error getting media current position'));
+                            }, failed.bind(null, done, 'media1.getCurrentPosition - Error getting media current position'),context);
                         }, 4000);
                     }
-                },
-                media1 = new Media(mediaFile, successCallback, failed.bind(null, done, 'media1 = new Media - Error creating Media object. Media file: ' + mediaFile), statusChange);
+                };
+                
+            var media1 = new Media(mediaFile, successCallback, failed.bind(null, done, 'media1 = new Media - Error creating Media object. Media file: ' + mediaFile, context), statusChange);
             //make audio playback two times faster
             media1.setRate(2);
             media1.play();
-        });
+        }, ACTUAL_PLAYBACK_TEST_TIMEOUT);
     });
 };
 
@@ -378,7 +391,7 @@ exports.defineManualTests = function (contentEl, createActionButton) {
     var media1 = null;
     var media1Timer = null;
     var audioSrc = null;
-    var defaultaudio = "http://cordova.apache.org/downloads/BlueZedEx.mp3";
+    var defaultaudio = "https://cordova.apache.org/downloads/BlueZedEx.mp3";
 
     //Play audio function
     function playAudio(url) {
