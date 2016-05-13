@@ -216,14 +216,14 @@
     NSString* mediaId = [command argumentAtIndex:0];
     NSString* resourcePath = [command argumentAtIndex:1];
 
-    CDVAudioFile* audioFile = [self audioFileForResource:resourcePath withId:mediaId doValidation:NO forRecording:NO];
+    CDVAudioFile* audioFile = [self audioFileForResource:resourcePath withId:mediaId doValidation:YES forRecording:NO];
 
     if (audioFile == nil) {
         NSString* errorMessage = [NSString stringWithFormat:@"Failed to initialize Media file with path %@", resourcePath];
         NSString* jsString = [NSString stringWithFormat:@"%@(\"%@\",%d,%@);", @"cordova.require('cordova-plugin-media.Media').onStatus", mediaId, MEDIA_ERROR, [self createMediaErrorWithCode:MEDIA_ERR_ABORTED message:errorMessage]];
         [self.commandDelegate evalJs:jsString];
     } else {
-        NSURL* resourceUrl = [[NSURL alloc] initWithString:resourcePath];
+        NSURL* resourceUrl = audioFile.resourceURL;
 
         if (![resourceUrl isFileURL] && ![resourcePath hasPrefix:CDVFILE_PREFIX]) {
             // First create an AVPlayerItem
@@ -239,6 +239,12 @@
             avPlayer = [[AVPlayer alloc] initWithPlayerItem:playerItem];
 
             [avPlayer.currentItem addObserver:self forKeyPath:@"status" options:0 context:nil];
+        }
+        else {
+            [self prepareToPlay:audioFile withId:mediaId];
+            double position = round(audioFile.player.duration * 1000) / 1000;
+            NSString *jsString = [NSString stringWithFormat:@"%@(\"%@\",%d,%.3f);", @"cordova.require('cordova-plugin-media.Media').onStatus", mediaId, MEDIA_DURATION, position];
+            [self.commandDelegate evalJs:jsString];
         }
 
         self.currMediaId = mediaId;
@@ -342,7 +348,7 @@
     CDVAudioFile* audioFile = [self audioFileForResource:resourcePath withId:mediaId doValidation:YES forRecording:NO];
     if ((audioFile != nil) && (audioFile.resourceURL != nil)) {
         if (audioFile.player == nil) {
-            bError = [self prepareToPlay:audioFile withId:mediaId];
+            //bError = [self prepareToPlay:audioFile withId:mediaId];
         }
         if (!bError) {
             //self.currMediaId = audioFile.player.mediaId;
@@ -383,7 +389,6 @@
                     }
 
                 } else {
-
                     NSNumber* loopOption = [options objectForKey:@"numberOfLoops"];
                     NSInteger numberOfLoops = 0;
                     if (loopOption != nil) {
@@ -406,60 +411,29 @@
                     [audioFile.player play];
                     position = round(audioFile.player.duration * 1000) / 1000;
                 }
-                if (!bError) {
-                    NSLog(@"Playing audio sample '%@'", audioFile.resourcePath);
-                    double position = 0;
-                    if (avPlayer) {
-                        CMTime time = [avPlayer currentTime];
-                        position = CMTimeGetSeconds(time);
-                        NSLog(@"Playing stream with AVPlayer");
-                        [avPlayer play];
-                    } else {
-
-                        NSNumber* loopOption = [options objectForKey:@"numberOfLoops"];
-                        NSInteger numberOfLoops = 0;
-                        if (loopOption != nil) {
-                            numberOfLoops = [loopOption intValue] - 1;
-                        }
-                        audioFile.player.numberOfLoops = numberOfLoops;
-                        if (audioFile.player.isPlaying) {
-                            [audioFile.player stop];
-                            audioFile.player.currentTime = 0;
-                        }
-                        if (audioFile.volume != nil) {
-                            audioFile.player.volume = [audioFile.volume floatValue];
-                        }
-
-                        audioFile.player.enableRate = YES;
-                        if (audioFile.rate != nil) {
-                            audioFile.player.rate = [audioFile.rate floatValue];
-                        }
-
-                        [audioFile.player play];
-                        //double position = round(audioFile.player.duration * 1000) / 1000;
-                    }
 
                 jsString = [NSString stringWithFormat:@"%@(\"%@\",%d,%.3f);\n%@(\"%@\",%d,%d);", @"cordova.require('cordova-plugin-media.Media').onStatus", mediaId, MEDIA_DURATION, position, @"cordova.require('cordova-plugin-media.Media').onStatus", mediaId, MEDIA_STATE, MEDIA_RUNNING];
                 [self.commandDelegate evalJs:jsString];
             }
-        }
-        if (bError) {
-            /*  I don't see a problem playing previously recorded audio so removing this section - BG
-            NSError* error;
-            // try loading it one more time, in case the file was recorded previously
-            audioFile.player = [[ AVAudioPlayer alloc ] initWithContentsOfURL:audioFile.resourceURL error:&error];
-            if (error != nil) {
-                NSLog(@"Failed to initialize AVAudioPlayer: %@\n", error);
-                audioFile.player = nil;
-            } else {
-                NSLog(@"Playing audio sample '%@'", audioFile.resourcePath);
-                audioFile.player.numberOfLoops = numberOfLoops;
-                [audioFile.player play];
-            } */
-            // error creating the session or player
-            // jsString = [NSString stringWithFormat: @"%@(\"%@\",%d,%d);", @"cordova.require('cordova-plugin-media.Media').onStatus", mediaId, MEDIA_ERROR,  MEDIA_ERR_NONE_SUPPORTED];
-            jsString = [NSString stringWithFormat:@"%@(\"%@\",%d,%@);", @"cordova.require('cordova-plugin-media.Media').onStatus", mediaId, MEDIA_ERROR, [self createMediaErrorWithCode:MEDIA_ERR_NONE_SUPPORTED message:nil]];
-            [self.commandDelegate evalJs:jsString];
+
+            if (bError) {
+                /*  I don't see a problem playing previously recorded audio so removing this section - BG
+                 NSError* error;
+                // try loading it one more time, in case the file was recorded previously
+                 audioFile.player = [[ AVAudioPlayer alloc ] initWithContentsOfURL:audioFile.resourceURL error:&error];
+                 if (error != nil) {
+                    NSLog(@"Failed to initialize AVAudioPlayer: %@\n", error);
+                    audioFile.player = nil;
+                 } else {
+                    NSLog(@"Playing audio sample '%@'", audioFile.resourcePath);
+                    audioFile.player.numberOfLoops = numberOfLoops;
+                    [audioFile.player play];
+                 } */
+                // error creating the session or player
+                // jsString = [NSString stringWithFormat: @"%@(\"%@\",%d,%d);", @"cordova.require('cordova-plugin-media.Media').onStatus", mediaId, MEDIA_ERROR,  MEDIA_ERR_NONE_SUPPORTED];
+                jsString = [NSString stringWithFormat:@"%@(\"%@\",%d,%@);", @"cordova.require('cordova-plugin-media.Media').onStatus", mediaId, MEDIA_ERROR, [self createMediaErrorWithCode:MEDIA_ERR_NONE_SUPPORTED message:nil]];
+                [self.commandDelegate evalJs:jsString];
+            }
         }
     }
 
@@ -558,7 +532,8 @@
         NSLog(@"Paused playing audio sample '%@'", audioFile.resourcePath);
         if (audioFile.player != nil) {
             [audioFile.player pause];
-        } else if (avPlayer != nil) {
+        }
+        else if (avPlayer != nil) {
             [avPlayer pause];
         }
 
@@ -585,7 +560,6 @@
     NSString* jsString;
 
     if ((audioFile != nil) && (audioFile.player != nil)) {
-
         if (posInSeconds >= audioFile.player.duration) {
             // The seek is past the end of file.  Stop media and reset to beginning instead of seeking past the end.
             [audioFile.player stop];
@@ -641,18 +615,20 @@
             if (audioFile.recorder && [audioFile.recorder isRecording]) {
                 [audioFile.recorder stop];
             }
-            if (avPlayer != nil) {
-                [avPlayer pause];
-                [avPlayer.currentItem removeObserver:self forKeyPath:@"status"];
-                avPlayer = nil;
-            }
-            if (self.avSession) {
-                [self.avSession setActive:NO error:nil];
-                self.avSession = nil;
-            }
             [[self soundCache] removeObjectForKey:mediaId];
             NSLog(@"Media with id %@ released", mediaId);
         }
+    }
+
+    if (avPlayer != nil) {
+        [avPlayer pause];
+        [avPlayer.currentItem removeObserver:self forKeyPath:@"status"];
+        avPlayer = nil;
+    }
+
+    if (self.avSession) {
+        [self.avSession setActive:NO error:nil];
+        self.avSession = nil;
     }
 }
 
@@ -665,10 +641,10 @@
     CDVAudioFile* audioFile = [[self soundCache] objectForKey:mediaId];
     double position = -1;
 
-    if ((audioFile != nil) && (audioFile.player != nil) && [audioFile.player isPlaying]) {
+    if ((audioFile != nil) && (audioFile.player != nil)) {
         position = round(audioFile.player.currentTime * 1000) / 1000;
     }
-    if (avPlayer) {
+    else if (avPlayer) {
        CMTime time = [avPlayer currentTime];
        position = CMTimeGetSeconds(time);
     }
