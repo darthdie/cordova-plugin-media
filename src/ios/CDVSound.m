@@ -77,7 +77,7 @@
                 break;
         }
 
-         NSString* jsString = [NSString stringWithFormat:@"%@(\"%@\",%@);", @"cordova.require('cordova-plugin-media.Media').onControl", self.currMediaId, subtype];
+         NSString* jsString = [NSString stringWithFormat:@"%@(\"%@\",\"%@\");", @"cordova.require('cordova-plugin-media.Media').onControl", self.currMediaId, subtype];
 
         [self.commandDelegate evalJs:jsString];
     }
