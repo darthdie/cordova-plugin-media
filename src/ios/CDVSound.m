@@ -33,7 +33,6 @@
 @synthesize soundCache, avSession, currMediaId;
 
 - (void)pluginInitialize {
-    NSLog(@"Media plugin init.");
     [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(receiveRemoteEvent:) name:@"receivedEvent" object:nil];
 }
@@ -41,46 +40,44 @@
 - (void)receiveRemoteEvent:(NSNotification *)notification {
     UIEvent * receivedEvent = notification.object;
 
+    if(self.currMediaId == nil) {
+        return;
+    }
+
     if (receivedEvent.type == UIEventTypeRemoteControl) {
         NSString *subtype = @"other";
 
         switch (receivedEvent.subtype) {
-
             case UIEventSubtypeRemoteControlTogglePlayPause:
-                NSLog(@"playpause clicked.");
+                NSLog(@"Playpause clicked");
                 subtype = @"playpause";
                 break;
 
             case UIEventSubtypeRemoteControlPlay:
-                NSLog(@"play clicked.");
+                NSLog(@"Play clicked");
                 subtype = @"play";
                 break;
 
             case UIEventSubtypeRemoteControlPause:
-                NSLog(@"nowplaying pause clicked.");
+                NSLog(@"Pause clicked");
                 subtype = @"pause";
                 break;
 
             case UIEventSubtypeRemoteControlPreviousTrack:
-                //[self previousTrack: nil];
-                NSLog(@"prev clicked.");
-                subtype = @"prevTrack";
+                NSLog(@"Prev clicked");
+                subtype = @"prev";
                 break;
 
             case UIEventSubtypeRemoteControlNextTrack:
-                NSLog(@"next clicked.");
-                subtype = @"nextTrack";
-                //[self nextTrack: nil];
+                NSLog(@"Next clicked");
+                subtype = @"next";
                 break;
 
             default:
                 break;
         }
 
-        NSDictionary *dict = @{@"subtype": subtype};
-        NSData *jsonData = [NSJSONSerialization dataWithJSONObject:dict options: 0 error: nil];
-        NSString *jsonString = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
-        NSString *jsString = [NSString stringWithFormat:@"if(window.remoteControls)remoteControls.receiveRemoteEvent(%@);", jsonString];
+         NSString* jsString = [NSString stringWithFormat:@"%@(\"%@\",%@);", @"cordova.require('cordova-plugin-media.Media').onControl", self.currMediaId, subtype];
 
         [self.commandDelegate evalJs:jsString];
     }

@@ -1,4 +1,3 @@
-cordova.define("cordova-plugin-media.Media", function(require, exports, module) {
 /*
  *
  * Licensed to the Apache Software Foundation (ASF) under one
@@ -189,7 +188,6 @@ Media.prototype.setNowPlaying = function(options) {
  * @param value         Use of value is determined by the msgType
  */
 Media.onStatus = function(id, msgType, value) {
-
     var media = mediaObjects[id];
 
     if(media) {
@@ -217,7 +215,17 @@ Media.onStatus = function(id, msgType, value) {
     else {
          console.error && console.error("Received Media.onStatus callback for unknown media :: " + id);
     }
+};
 
+Media.onControl = function(id, type) {
+    var media = mediaObjects[id];
+
+    if(media) {
+        media.onControl && media.onControl(type);
+    }
+    else {
+        console.error && console.error("Received Media.onControl callback for unknown media :: " + id);
+    }
 };
 
 module.exports = Media;
@@ -242,5 +250,3 @@ if (cordova.platformId === 'android' || cordova.platformId === 'amazon-fireos' |
         channel.initializationComplete('onMediaPluginReady');
     });
 }
-
-});
