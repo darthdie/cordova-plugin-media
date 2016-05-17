@@ -17,6 +17,9 @@
 
 #import "CDVSound.h"
 #import "CDVFile.h"
+#import <MediaPlayer/MPNowPlayingInfoCenter.h>
+#import <MediaPlayer/MPMediaItem.h>
+#import <MediaPlayer/MPRemoteCommandCenter.h>
 #import <AVFoundation/AVFoundation.h>
 
 #define DOCUMENTS_SCHEME_PREFIX @"documents://"
@@ -141,6 +144,7 @@
 
     if ([self soundCache] == nil) {
         [self setSoundCache:[NSMutableDictionary dictionaryWithCapacity:1]];
+        [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
     } else {
         audioFile = [[self soundCache] objectForKey:mediaId];
     }
@@ -412,6 +416,8 @@
                     position = round(audioFile.player.duration * 1000) / 1000;
                 }
 
+                [self updateNowPlaying:mediaId];
+
                 jsString = [NSString stringWithFormat:@"%@(\"%@\",%d,%.3f);\n%@(\"%@\",%d,%d);", @"cordova.require('cordova-plugin-media.Media').onStatus", mediaId, MEDIA_DURATION, position, @"cordova.require('cordova-plugin-media.Media').onStatus", mediaId, MEDIA_STATE, MEDIA_RUNNING];
                 [self.commandDelegate evalJs:jsString];
             }
@@ -504,16 +510,22 @@
         NSLog(@"Stopped playing audio sample '%@'", audioFile.resourcePath);
         [audioFile.player stop];
         audioFile.player.currentTime = 0;
+        [self updateNowPlaying:mediaId];
+
         jsString = [NSString stringWithFormat:@"%@(\"%@\",%d,%d);", @"cordova.require('cordova-plugin-media.Media').onStatus", mediaId, MEDIA_STATE, MEDIA_STOPPED];
     }
     if (avPlayer.currentItem && avPlayer.currentItem.asset) {
         NSLog(@"Stopped playing audio sample '%@'", audioFile.resourcePath);
         [avPlayer seekToTime: kCMTimeZero
-                     toleranceBefore: kCMTimeZero
-                      toleranceAfter: kCMTimeZero
-                   completionHandler: ^(BOOL finished){
-                           if (finished) [avPlayer pause];
-                       }];
+                    toleranceBefore: kCMTimeZero
+                    toleranceAfter: kCMTimeZero
+                    completionHandler: ^(BOOL finished){
+                        if (finished) [avPlayer pause];
+
+                        [self updateNowPlaying:mediaId];
+                    }
+         ];
+
         jsString = [NSString stringWithFormat:@"%@(\"%@\",%d,%d);", @"cordova.require('cordova-plugin-media.Media').onStatus", mediaId, MEDIA_STATE, MEDIA_STOPPED];
     }
     // ignore if no media playing
@@ -536,6 +548,8 @@
         else if (avPlayer != nil) {
             [avPlayer pause];
         }
+
+        [self updateNowPlaying:mediaId];
 
         jsString = [NSString stringWithFormat:@"%@(\"%@\",%d,%d);", @"cordova.require('cordova-plugin-media.Media').onStatus", mediaId, MEDIA_STATE, MEDIA_PAUSED];
     }
@@ -572,6 +586,7 @@
             // NSLog(@"seekJsString=%@",jsString);
         }
 
+        [self updateNowPlaying:mediaId];
     } else if (avPlayer != nil) {
         int32_t timeScale = avPlayer.currentItem.asset.duration.timescale;
         CMTime timeToSeek = CMTimeMakeWithSeconds(posInSeconds, timeScale);
@@ -588,6 +603,8 @@
                   toleranceAfter: kCMTimeZero
                completionHandler: ^(BOOL finished) {
                    if (isPlaying) [avPlayer play];
+
+                   [self updateNowPlaying:mediaId];
                }];
         } else {
             CDVMediaError errcode = MEDIA_ERR_ABORTED;
@@ -618,6 +635,8 @@
             [[self soundCache] removeObjectForKey:mediaId];
             NSLog(@"Media with id %@ released", mediaId);
         }
+
+        [self updateNowPlaying:mediaId];
     }
 
     if (avPlayer != nil) {
@@ -817,6 +836,9 @@
     if (self.avSession) {
         [self.avSession setActive:NO error:nil];
     }
+
+    [self updateNowPlaying:mediaId];
+
     [self.commandDelegate evalJs:jsString];
 }
 
@@ -829,6 +851,9 @@
     if (self.avSession) {
         [self.avSession setActive:NO error:nil];
     }
+
+    [self updateNowPlaying:mediaId];
+
     [self.commandDelegate evalJs:jsString];
 }
 
@@ -839,6 +864,130 @@
 
 -(void)itemDidFinishLoading:(NSNotification *) notification {
 
+}
+
+- (void)setNowPlaying:(CDVInvokedUrlCommand*)command {
+    NSString* callbackId = command.callbackId;
+
+#pragma unused(callbackId)
+    NSString* mediaId = [command argumentAtIndex:0];
+    NSString* title = [command argumentAtIndex:1];
+    NSString* artist = [command argumentAtIndex:2];
+    NSString* albumArt = [command argumentAtIndex:3];
+    [self.commandDelegate runInBackground:^{
+        UIImage *image = nil;
+
+        if (![albumArt isEqual: @""]) {
+            if ([albumArt hasPrefix: @"http://"] || [albumArt hasPrefix: @"https://"]) {
+                NSURL *imageURL = [NSURL URLWithString:albumArt];
+                NSData *imageData = [NSData dataWithContentsOfURL:imageURL];
+                image = [UIImage imageWithData:imageData];
+            }
+            else if ([albumArt hasPrefix: @"file://"]) {
+                NSString *fullPath = [albumArt stringByReplacingOccurrencesOfString:@"file://" withString:@""];
+                BOOL fileExists = [[NSFileManager defaultManager] fileExistsAtPath:fullPath];
+                if (fileExists) {
+                    image = [[UIImage alloc] initWithContentsOfFile:fullPath];
+                }
+            }
+            // albumArt is relative path to local file
+            else {
+                NSString *basePath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) objectAtIndex:0];
+                NSString *fullPath = [NSString stringWithFormat:@"%@%@", basePath, albumArt];
+                BOOL fileExists = [[NSFileManager defaultManager] fileExistsAtPath:fullPath];
+                if (fileExists) {
+                    image = [UIImage imageNamed:fullPath];
+                }
+            }
+        }
+        else {
+            image = [UIImage imageNamed:@"no-image"];
+        }
+
+        CGImageRef cgref = [image CGImage];
+        CIImage *cim = [image CIImage];
+        if ([self soundCache] != nil) {
+            CDVAudioFile* audioFile = [[self soundCache] objectForKey:mediaId];
+            if (audioFile != nil) {
+                double duration = 0;
+                double position = 0;
+                BOOL isPlaying = false;
+                if (audioFile.player) {
+                    duration = round(audioFile.player.duration * 1000) / 1000;
+                    position = round(audioFile.player.currentTime * 1000) / 1000;
+                    isPlaying = audioFile.player.playing;
+                }
+                else if (avPlayer.currentItem && avPlayer.currentItem.asset){
+                    CMTime time = avPlayer.currentItem.asset.duration;
+                    duration = CMTimeGetSeconds(time);
+
+                    time = [avPlayer currentTime];
+                    position = CMTimeGetSeconds(time);
+                    isPlaying = avPlayer.rate != 0.0f;
+                }
+
+                NSLog(@"IsPlaying: %d", isPlaying);
+
+                MPNowPlayingInfoCenter* info = [MPNowPlayingInfoCenter defaultCenter];
+                NSMutableDictionary* newInfo = [NSMutableDictionary dictionary];
+
+                [newInfo setObject:title forKey:MPMediaItemPropertyTitle];
+                [newInfo setObject:artist forKey:MPMediaItemPropertyPodcastTitle];
+                [newInfo setObject:artist forKey:MPMediaItemPropertyArtist];
+                [newInfo setObject:[NSNumber numberWithInteger:MPMediaTypePodcast] forKey:MPMediaItemPropertyMediaType];
+                [newInfo setObject:[NSNumber numberWithInteger: isPlaying ? 1.0f : 0.0f] forKey:MPNowPlayingInfoPropertyPlaybackRate];
+                [newInfo setObject:[NSNumber numberWithDouble:duration] forKey:MPMediaItemPropertyPlaybackDuration];
+                [newInfo setObject:[NSNumber numberWithInteger:position] forKey:MPNowPlayingInfoPropertyElapsedPlaybackTime];
+
+                if(cim != nil || cgref != NULL) {
+                    MPMediaItemArtwork *artwork = [[MPMediaItemArtwork alloc] initWithImage: image];
+                    [newInfo setObject:artwork forKey:MPMediaItemPropertyArtwork];
+                }
+
+                [info setNowPlayingInfo:newInfo];
+            }
+        }
+    }];
+}
+
+- (void)updateNowPlaying:(NSString*)mediaId {
+    if ([self soundCache] == nil) {
+        return;
+    }
+
+    CDVAudioFile* audioFile = [[self soundCache] objectForKey:mediaId];
+    if (audioFile == nil) {
+        [[MPNowPlayingInfoCenter defaultCenter] setNowPlayingInfo:nil];
+        return;
+    }
+
+    double duration = 0;
+    double position = 0;
+    BOOL isPlaying = false;
+    if (audioFile.player) {
+        duration = round(audioFile.player.duration * 1000) / 1000;
+        position = round(audioFile.player.currentTime * 1000) / 1000;
+        isPlaying = audioFile.player.playing;
+    }
+    else if (avPlayer.currentItem && avPlayer.currentItem.asset){
+        CMTime time = avPlayer.currentItem.asset.duration;
+        duration = CMTimeGetSeconds(time);
+
+        time = [avPlayer currentTime];
+        position = CMTimeGetSeconds(time);
+        isPlaying = avPlayer.rate != 0.0f;
+    }
+
+    MPNowPlayingInfoCenter* info = [MPNowPlayingInfoCenter defaultCenter];
+    NSMutableDictionary *newInfo = [NSMutableDictionary dictionaryWithDictionary:info.nowPlayingInfo] ;
+
+    NSLog(@"IsPlaying (update): %d", isPlaying);
+
+    [newInfo setObject:[NSNumber numberWithInteger: isPlaying ? 1.0f : 0.0f] forKey:MPNowPlayingInfoPropertyPlaybackRate];
+    [newInfo setObject:[NSNumber numberWithDouble:duration] forKey:MPMediaItemPropertyPlaybackDuration];
+    [newInfo setObject:[NSNumber numberWithInteger:position] forKey:MPNowPlayingInfoPropertyElapsedPlaybackTime];
+
+    [info setNowPlayingInfo:newInfo];
 }
 
 - (void)onMemoryWarning
@@ -853,6 +1002,7 @@
 - (void)dealloc
 {
     [[self soundCache] removeAllObjects];
+    [[UIApplication sharedApplication] endReceivingRemoteControlEvents];
 }
 
 - (void)onReset

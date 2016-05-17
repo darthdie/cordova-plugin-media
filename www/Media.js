@@ -1,3 +1,4 @@
+cordova.define("cordova-plugin-media.Media", function(require, exports, module) {
 /*
  *
  * Licensed to the Apache Software Foundation (ASF) under one
@@ -167,6 +168,17 @@ Media.prototype.setRate = function(rate) {
     }
 };
 
+Media.prototype.setNowPlaying = function(options) {
+    if (cordova.platformId === 'ios') {
+        options = options || {};
+        var title = options.title || '';
+        var artist = options.artist || '';
+        var albumArt = options.albumArt || '';
+        exec(null, null, "Media", "setNowPlaying", [this.id, title, artist, albumArt]);
+    } else {
+        console.warn('media.setNowPlaying method is currently not supported for', cordova.platformId, 'platform.')
+    }
+};
 
 /**
  * Audio has status update.
@@ -230,3 +242,5 @@ if (cordova.platformId === 'android' || cordova.platformId === 'amazon-fireos' |
         channel.initializationComplete('onMediaPluginReady');
     });
 }
+
+});
