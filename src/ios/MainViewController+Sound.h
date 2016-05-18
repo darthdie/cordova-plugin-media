@@ -7,5 +7,5 @@
 #import "MainViewController.h"
 
 @interface MainViewController (Sound)
-
+    @property (nonatomic, weak) CDVPlugin *soundPlugin;
 @end

@@ -17,10 +17,10 @@
 
 #import "CDVSound.h"
 #import "CDVFile.h"
-#import <MediaPlayer/MPNowPlayingInfoCenter.h>
-#import <MediaPlayer/MPMediaItem.h>
-#import <MediaPlayer/MPRemoteCommandCenter.h>
+
+@import MediaPlayer;
 #import <AVFoundation/AVFoundation.h>
+#import "MainViewController+Sound.h"
 
 #define DOCUMENTS_SCHEME_PREFIX @"documents://"
 #define HTTP_SCHEME_PREFIX @"http://"
@@ -33,12 +33,54 @@
 @synthesize soundCache, avSession, currMediaId;
 
 - (void)pluginInitialize {
-    [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(receiveRemoteEvent:) name:@"receivedEvent" object:nil];
+    MainViewController *view = (MainViewController*)self.viewController;
+    view.soundPlugin = self;
+
+    [self.viewController becomeFirstResponder];
+
+    MPRemoteCommandCenter *rcc = [MPRemoteCommandCenter sharedCommandCenter];
+    MPSkipIntervalCommand *skipBackwardIntervalCommand = [rcc skipBackwardCommand];
+    [skipBackwardIntervalCommand setEnabled:YES];
+    skipBackwardIntervalCommand.preferredIntervals = @[@(10)];
+    [skipBackwardIntervalCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent *event) {
+        if(self.currMediaId != nil) {
+            NSString* jsString = [NSString stringWithFormat:@"%@(\"%@\",\"%@\");", @"cordova.require('cordova-plugin-media.Media').onControl", self.currMediaId, @"prev"];
+
+            [self.commandDelegate evalJs:jsString];
+        }
+
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
+
+    MPSkipIntervalCommand *skipForwardIntervalCommand = [rcc skipForwardCommand];
+    skipForwardIntervalCommand.preferredIntervals = @[@(30)];  // Max 99
+    [skipForwardIntervalCommand setEnabled:YES];
+    //[skipForwardIntervalCommand addTarget:self action:@selector(skipForwardEvent:)];
+    [skipForwardIntervalCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent *event) {
+        if(self.currMediaId != nil) {
+            NSString* jsString = [NSString stringWithFormat:@"%@(\"%@\",\"%@\");", @"cordova.require('cordova-plugin-media.Media').onControl", self.currMediaId, @"next"];
+
+            [self.commandDelegate evalJs:jsString];
+        }
+
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
+
+    MPRemoteCommand *playCommand = [rcc playCommand];
+    [playCommand setEnabled:YES];
+    [playCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent *event) {
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
+
+    MPRemoteCommand *pauseCommand = [rcc pauseCommand];
+    [pauseCommand setEnabled:YES];
+    [pauseCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent *event) {
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
 }
 
-- (void)receiveRemoteEvent:(NSNotification *)notification {
-    UIEvent * receivedEvent = notification.object;
+- (void)remoteControlReceivedWithEvent:(UIEvent*)receivedEvent {
+    //UIEvent * receivedEvent = notification.object;
 
     if(self.currMediaId == nil) {
         return;
@@ -290,7 +332,12 @@
             [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(itemStalledPlaying:) name:AVPlayerItemPlaybackStalledNotification object:playerItem];
 
             // Pass the AVPlayerItem to a new player
-            avPlayer = [[AVPlayer alloc] initWithPlayerItem:playerItem];
+            if(avPlayer == nil) {
+                avPlayer = [[AVPlayer alloc] initWithPlayerItem:playerItem];
+            }
+            else {
+                [avPlayer replaceCurrentItemWithPlayerItem:playerItem];
+            }
 
             [avPlayer.currentItem addObserver:self forKeyPath:@"status" options:0 context:nil];
         }
@@ -412,24 +459,25 @@
             // get the audioSession and set the category to allow Playing when device is locked or ring/silent switch engaged
             if ([self hasAudioSession]) {
                 NSError* __autoreleasing err = nil;
-                NSNumber* playAudioWhenScreenIsLocked = [options objectForKey:@"playAudioWhenScreenIsLocked"];
-                BOOL bPlayAudioWhenScreenIsLocked = YES;
-                if (playAudioWhenScreenIsLocked != nil) {
-                    bPlayAudioWhenScreenIsLocked = [playAudioWhenScreenIsLocked boolValue];
-                }
 
-                NSString* sessionCategory = bPlayAudioWhenScreenIsLocked ? AVAudioSessionCategoryPlayback : AVAudioSessionCategorySoloAmbient;
-                [self.avSession setCategory:sessionCategory error:&err];
+                [[UIApplication sharedApplication] endReceivingRemoteControlEvents];
+
+                [self.avSession setCategory:AVAudioSessionCategoryPlayback withOptions:0 error:&err];
+                [self.avSession setMode:AVAudioSessionModeSpokenAudio error:&err];
                 if (![self.avSession setActive:YES error:&err]) {
                     // other audio with higher priority that does not allow mixing could cause this to fail
                     NSLog(@"Unable to play audio: %@", [err localizedFailureReason]);
                     bError = YES;
+                }
+                else {
+                    [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
                 }
             }
             if (!bError) {
                 NSLog(@"Playing audio sample '%@'", audioFile.resourcePath);
                 double position = 0;
                 if (avPlayer.currentItem && avPlayer.currentItem.asset) {
+                    avPlayer.allowsExternalPlayback = false;
                     CMTime time = avPlayer.currentItem.asset.duration;
                     position = CMTimeGetSeconds(time);
 
@@ -976,25 +1024,25 @@
                     isPlaying = avPlayer.rate != 0.0f;
                 }
 
-                NSLog(@"IsPlaying: %d", isPlaying);
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    MPNowPlayingInfoCenter* info = [MPNowPlayingInfoCenter defaultCenter];
+                    NSMutableDictionary* newInfo = [NSMutableDictionary dictionary];
 
-                MPNowPlayingInfoCenter* info = [MPNowPlayingInfoCenter defaultCenter];
-                NSMutableDictionary* newInfo = [NSMutableDictionary dictionary];
+                    [newInfo setObject:title forKey:MPMediaItemPropertyTitle];
+                    [newInfo setObject:artist forKey:MPMediaItemPropertyPodcastTitle];
+                    [newInfo setObject:artist forKey:MPMediaItemPropertyArtist];
+                    [newInfo setObject:[NSNumber numberWithInteger:MPMediaTypePodcast] forKey:MPMediaItemPropertyMediaType];
+                    [newInfo setObject:[NSNumber numberWithInteger: isPlaying ? 1.0f : 0.0f] forKey:MPNowPlayingInfoPropertyPlaybackRate];
+                    [newInfo setObject:[NSNumber numberWithDouble:duration] forKey:MPMediaItemPropertyPlaybackDuration];
+                    [newInfo setObject:[NSNumber numberWithInteger:position] forKey:MPNowPlayingInfoPropertyElapsedPlaybackTime];
 
-                [newInfo setObject:title forKey:MPMediaItemPropertyTitle];
-                [newInfo setObject:artist forKey:MPMediaItemPropertyPodcastTitle];
-                [newInfo setObject:artist forKey:MPMediaItemPropertyArtist];
-                [newInfo setObject:[NSNumber numberWithInteger:MPMediaTypePodcast] forKey:MPMediaItemPropertyMediaType];
-                [newInfo setObject:[NSNumber numberWithInteger: isPlaying ? 1.0f : 0.0f] forKey:MPNowPlayingInfoPropertyPlaybackRate];
-                [newInfo setObject:[NSNumber numberWithDouble:duration] forKey:MPMediaItemPropertyPlaybackDuration];
-                [newInfo setObject:[NSNumber numberWithInteger:position] forKey:MPNowPlayingInfoPropertyElapsedPlaybackTime];
+                    if(cim != nil || cgref != NULL) {
+                        MPMediaItemArtwork *artwork = [[MPMediaItemArtwork alloc] initWithImage: image];
+                        [newInfo setObject:artwork forKey:MPMediaItemPropertyArtwork];
+                    }
 
-                if(cim != nil || cgref != NULL) {
-                    MPMediaItemArtwork *artwork = [[MPMediaItemArtwork alloc] initWithImage: image];
-                    [newInfo setObject:artwork forKey:MPMediaItemPropertyArtwork];
-                }
-
-                [info setNowPlayingInfo:newInfo];
+                    [info setNowPlayingInfo:newInfo];
+                });
             }
         }
     }];
@@ -1011,33 +1059,35 @@
         return;
     }
 
-    double duration = 0;
-    double position = 0;
-    BOOL isPlaying = false;
-    if (audioFile.player) {
-        duration = round(audioFile.player.duration * 1000) / 1000;
-        position = round(audioFile.player.currentTime * 1000) / 1000;
-        isPlaying = audioFile.player.playing;
-    }
-    else if (avPlayer.currentItem && avPlayer.currentItem.asset){
-        CMTime time = avPlayer.currentItem.asset.duration;
-        duration = CMTimeGetSeconds(time);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        double duration = 0;
+        double position = 0;
+        BOOL isPlaying = false;
+        if (audioFile.player) {
+            duration = round(audioFile.player.duration * 1000) / 1000;
+            position = round(audioFile.player.currentTime * 1000) / 1000;
+            isPlaying = audioFile.player.playing;
+        }
+        else if (avPlayer.currentItem && avPlayer.currentItem.asset){
+            CMTime time = avPlayer.currentItem.asset.duration;
+            duration = CMTimeGetSeconds(time);
 
-        time = [avPlayer currentTime];
-        position = CMTimeGetSeconds(time);
-        isPlaying = avPlayer.rate != 0.0f;
-    }
+            time = [avPlayer currentTime];
+            position = CMTimeGetSeconds(time);
+            isPlaying = avPlayer.rate != 0.0f;
+        }
 
-    MPNowPlayingInfoCenter* info = [MPNowPlayingInfoCenter defaultCenter];
-    NSMutableDictionary *newInfo = [NSMutableDictionary dictionaryWithDictionary:info.nowPlayingInfo] ;
+        MPNowPlayingInfoCenter* info = [MPNowPlayingInfoCenter defaultCenter];
+        NSMutableDictionary *newInfo = [NSMutableDictionary dictionaryWithDictionary:info.nowPlayingInfo];
 
-    NSLog(@"IsPlaying (update): %d", isPlaying);
+        [newInfo setObject:[NSNumber numberWithInteger: isPlaying ? 1.0f : 0.0f] forKey:MPNowPlayingInfoPropertyPlaybackRate];
+        [newInfo setObject:[NSNumber numberWithDouble:duration] forKey:MPMediaItemPropertyPlaybackDuration];
+        [newInfo setObject:[NSNumber numberWithInteger:position] forKey:MPNowPlayingInfoPropertyElapsedPlaybackTime];
 
-    [newInfo setObject:[NSNumber numberWithInteger: isPlaying ? 1.0f : 0.0f] forKey:MPNowPlayingInfoPropertyPlaybackRate];
-    [newInfo setObject:[NSNumber numberWithDouble:duration] forKey:MPMediaItemPropertyPlaybackDuration];
-    [newInfo setObject:[NSNumber numberWithInteger:position] forKey:MPNowPlayingInfoPropertyElapsedPlaybackTime];
+        [info setNowPlayingInfo:newInfo];
 
-    [info setNowPlayingInfo:newInfo];
+        newInfo = [NSMutableDictionary dictionaryWithDictionary:info.nowPlayingInfo];
+    });
 }
 
 - (void)onMemoryWarning
@@ -1049,11 +1099,11 @@
     [super onMemoryWarning];
 }
 
-- (void)dealloc
-{
+- (void)dealloc {
+    NSLog(@"Deallocing");
     [[self soundCache] removeAllObjects];
     [[UIApplication sharedApplication] endReceivingRemoteControlEvents];
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:@"receivedEvent" object:nil];
+    [self.viewController resignFirstResponder];
 }
 
 - (void)onReset
