@@ -61,69 +61,10 @@ public class AudioHandler extends CordovaPlugin {
 
     public static String TAG = "AudioHandler";
     HashMap<String, AudioPlayer> players;  // Audio player object
-    ArrayList<AudioPlayer> pausedForPhone; // Audio players that were paused when phone call came in
     ArrayList<AudioPlayer> pausedForFocus; // Audio players that were paused when focus was lost
     private int origVolumeStream = -1;
     private CallbackContext messageChannel;
     private BroadcastReceiver musicReceiver;
-
-    private class FocusListener implements AudioManager.OnAudioFocusChangeListener {
-        AudioManager audioManager;
-
-        public FocusListener (Context ctx) {
-            this.audioManager = (AudioManager)ctx.getSystemService(Context.AUDIO_SERVICE);
-            int result = this.audioManager.requestAudioFocus(this,
-                AudioManager.STREAM_MUSIC,
-                AudioManager.AUDIOFOCUS_GAIN);
-
-            if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-                onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS);
-            }
-        }
-
-        @Override
-        public void onAudioFocusChange (int focusChange) {
-            Log.d("Satchel", "Focus change: " + focusChange);
-
-            if (focusChange == AudioManager.AUDIOFOCUS_LOSS || focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
-                for (AudioPlayer audio : players.values()) {
-                    if (audio.getState() == AudioPlayer.STATE.MEDIA_RUNNING.ordinal()) {
-                        audio.pausePlaying();
-                    }
-                }
-            }
-            else if (focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK) {
-                for (AudioPlayer audio : players.values()) {
-                    audio.duckVolume();
-                }
-            }
-            else if (focusChange == AudioManager.AUDIOFOCUS_GAIN) {
-                for (AudioPlayer audio : players.values()) {
-                    audio.unduckVolume();
-                }
-            }
-            else if(focusChange == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-                for (AudioPlayer audio : pausedForPhone) {
-                    audio.startPlaying(null);
-                }
-
-                pausedForPhone.clear();
-            }
-        }
-
-        public void abandonFocus() {
-            if (this.audioManager != null) {
-                this.audioManager.abandonAudioFocus(this);
-                this.audioManager = null;
-            }
-        }
-
-        public void onDestroy() {
-            abandonFocus();
-        }
-    }
-
-    private FocusListener focusListener;
 
 
     public static String [] permissions = { Manifest.permission.RECORD_AUDIO, Manifest.permission.WRITE_EXTERNAL_STORAGE};
@@ -140,13 +81,10 @@ public class AudioHandler extends CordovaPlugin {
      */
     public AudioHandler() {
         this.players = new HashMap<String, AudioPlayer>();
-        this.pausedForPhone = new ArrayList<AudioPlayer>();
-//<<<<<<< HEAD
+
         this.musicReceiver = null;
-        //this.focusListener = null;
-//=======
+
         this.pausedForFocus = new ArrayList<AudioPlayer>();
-//>>>>>>> 978c038603dd6ebfbb139e9bf0fd3218c549ca68
     }
 
     protected void getWritePermission(int requestCode) {
@@ -275,11 +213,6 @@ public class AudioHandler extends CordovaPlugin {
                 this.musicReceiver = null;
             } catch (Exception e) { }
         }
-
-        if (this.focusListener != null) {
-            this.focusListener.abandonFocus();
-            this.focusListener = null;
-        }
     }
 
     /**
@@ -288,43 +221,6 @@ public class AudioHandler extends CordovaPlugin {
     @Override
     public void onReset() {
         onDestroy();
-    }
-
-    /**
-     * Called when a message is sent to plugin.
-     *
-     * @param id            The message id
-     * @param data          The message data
-     * @return              Object to stop propagation or null
-     */
-    public Object onMessage(String id, Object data) {
-        Log.d("Satchel", "Messaged received id: " + id);
-        Log.d("Satchel", "Messaged received data: " + data);
-        // If phone message
-        if (id.equals("telephone")) {
-
-            // If phone ringing, then pause playing
-            if ("ringing".equals(data) || "offhook".equals(data)) {
-
-                // Get all audio players and pause them
-                for (AudioPlayer audio : this.players.values()) {
-                    if (audio.getState() == AudioPlayer.STATE.MEDIA_RUNNING.ordinal()) {
-                        this.pausedForPhone.add(audio);
-                        audio.pausePlaying();
-                    }
-                }
-
-            }
-
-            // If phone idle, then resume playing those players we paused
-            /*else if ("idle".equals(data)) {
-                for (AudioPlayer audio : this.pausedForPhone) {
-                    audio.startPlaying(null);
-                }
-                this.pausedForPhone.clear();
-            }*/
-        }
-        return null;
     }
 
     //--------------------------------------------------------------------------
@@ -586,77 +482,6 @@ public class AudioHandler extends CordovaPlugin {
             };
 
             cordova.getActivity().registerReceiver(this.musicReceiver, intentFilter);
-        }
-
-        if (this.focusListener == null) {
-            /*AudioManager audioManager = (AudioManager)cordova.getActivity().getBaseContext().getSystemService(Context.AUDIO_SERVICE);
-            this.focusListener = new OnAudioFocusChangeListener() {
-                {
-                    int result = audioManager.requestAudioFocus(this,
-                        AudioManager.STREAM_MUSIC,
-                        AudioManager.AUDIOFOCUS_GAIN);
-
-                    if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-                        onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS);
-                        //sendFocusEvent(AudioManager.AUDIOFOCUS_LOSS);
-                    }
-                }
-
-                public void onAudioFocusChange (int focusChange) {
-                    if (focusChange == AudioManager.AUDIOFOCUS_LOSS) {
-                        for (AudioPlayer audio : players.values()) {
-                            if (audio.getState() == AudioPlayer.STATE.MEDIA_RUNNING.ordinal()) {
-                                audio.pausePlaying();
-                            }
-                        }
-                    }
-                }
-
-                public void abandonFocus() {
-                    if (audioManager != null) {
-                        audioManager.abandonAudioFocus(this);
-                        audioManager = null;
-                    }
-                }
-
-                public void onDestroy() {
-                    abandonFocus();
-                }
-            };*/
-
-            /*private class FocusListener implements AudioManager.OnAudioFocusChangeListener {
-                AudioManager audioManager;
-
-                public FocusListener (Context ctx) {
-                    this.audioManager = (AudioManager)ctx.getSystemService(Context.AUDIO_SERVICE);
-                    int result = this.audioManager.requestAudioFocus(this,
-                        AudioManager.STREAM_MUSIC,
-                        AudioManager.AUDIOFOCUS_GAIN);
-
-                    if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-                        sendFocusEvent(AudioManager.AUDIOFOCUS_LOSS);
-                    }
-                }
-
-                @Override
-                public void onAudioFocusChange (int focusChange) {
-                    sendFocusEvent(focusChange);
-                }
-
-                public void abandonFocus() {
-                    if (this.audioManager != null) {
-                        this.audioManager.abandonAudioFocus(this);
-                        this.audioManager = null;
-                    }
-                }
-
-                public void onDestroy() {
-                    abandonFocus();
-                }
-            }*/
-
-            Context ctx = cordova.getActivity().getBaseContext();
-            this.focusListener = this.new FocusListener(ctx);
         }
 
         origVolumeStream = cordova.getActivity().getVolumeControlStream();

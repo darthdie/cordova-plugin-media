@@ -191,6 +191,7 @@ Media.prototype.setNowPlaying = function(options) {
     } else {
         console.warn('media.setNowPlaying method is currently not supported for', cordova.platformId, 'platform.')
     }
+};
 
 /**
  * Get amplitude of audio.

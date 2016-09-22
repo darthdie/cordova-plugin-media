@@ -106,12 +106,8 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
         this.handler = handler;
         this.id = id;
         this.audioFile = file;
-<<<<<<< HEAD
         this.recorder = new MediaRecorder();
         //this.volume = 1.0f;
-
-=======
->>>>>>> 978c038603dd6ebfbb139e9bf0fd3218c549ca68
         this.tempFiles = new LinkedList<String>();
     }
 
