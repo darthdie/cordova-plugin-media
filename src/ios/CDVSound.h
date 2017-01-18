@@ -115,4 +115,6 @@ typedef NSUInteger CDVMediaMsg;
 - (void)setVolume:(CDVInvokedUrlCommand*)command;
 - (void)setRate:(CDVInvokedUrlCommand*)command;
 
+- (void)setNowPlaying:(CDVInvokedUrlCommand*)command;
+
 @end

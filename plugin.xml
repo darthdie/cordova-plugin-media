@@ -103,6 +103,8 @@ id="cordova-plugin-media"
          </config-file>
          <header-file src="src/ios/CDVSound.h" />
          <source-file src="src/ios/CDVSound.m" />
+         <header-file src="src/ios/MainViewController+Sound.h" />
+         <source-file src="src/ios/MainViewController+Sound.m" />
      </platform>
 
     <!-- blackberry10 -->
