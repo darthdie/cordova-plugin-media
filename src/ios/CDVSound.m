@@ -345,95 +345,63 @@
 {
     [self.commandDelegate runInBackground:^{
 
-    NSString* callbackId = command.callbackId;
+        NSString* callbackId = command.callbackId;
 
-#pragma unused(callbackId)
-    NSString* mediaId = [command argumentAtIndex:0];
-    NSString* resourcePath = [command argumentAtIndex:1];
-    NSDictionary* options = [command argumentAtIndex:2 withDefault:nil];
+    #pragma unused(callbackId)
+        NSString* mediaId = [command argumentAtIndex:0];
+        NSString* resourcePath = [command argumentAtIndex:1];
+        NSDictionary* options = [command argumentAtIndex:2 withDefault:nil];
 
-    BOOL bError = NO;
-    NSString* jsString = nil;
+        BOOL bError = NO;
+        NSString* jsString = nil;
 
-    CDVAudioFile* audioFile = [self audioFileForResource:resourcePath withId:mediaId doValidation:YES forRecording:NO];
-    if ((audioFile != nil) && (audioFile.resourceURL != nil)) {
-        if (audioFile.player == nil) {
-            bError = [self prepareToPlay:audioFile withId:mediaId];
-        }
-        if (!bError) {
-            //self.currMediaId = audioFile.player.mediaId;
-            self.currMediaId = mediaId;
-
-            // audioFile.player != nil  or player was successfully created
-            // get the audioSession and set the category to allow Playing when device is locked or ring/silent switch engaged
-            if ([self hasAudioSession]) {
-                NSError* __autoreleasing err = nil;
-                NSNumber* playAudioWhenScreenIsLocked = [options objectForKey:@"playAudioWhenScreenIsLocked"];
-                BOOL bPlayAudioWhenScreenIsLocked = YES;
-                if (playAudioWhenScreenIsLocked != nil) {
-                    bPlayAudioWhenScreenIsLocked = [playAudioWhenScreenIsLocked boolValue];
-                }
-
-                NSString* sessionCategory = bPlayAudioWhenScreenIsLocked ? AVAudioSessionCategoryPlayback : AVAudioSessionCategorySoloAmbient;
-                [self.avSession setCategory:sessionCategory error:&err];
-                if (![self.avSession setActive:YES error:&err]) {
-                    // other audio with higher priority that does not allow mixing could cause this to fail
-                    NSLog(@"Unable to play audio: %@", [err localizedFailureReason]);
-                    bError = YES;
-                }
+        CDVAudioFile* audioFile = [self audioFileForResource:resourcePath withId:mediaId doValidation:YES forRecording:NO];
+        if ((audioFile != nil) && (audioFile.resourceURL != nil)) {
+            if (audioFile.player == nil) {
+                bError = [self prepareToPlay:audioFile withId:mediaId];
             }
             if (!bError) {
-                NSLog(@"Playing audio sample '%@'", audioFile.resourcePath);
-                double duration = 0;
-                if (avPlayer.currentItem && avPlayer.currentItem.asset) {
-                    CMTime time = avPlayer.currentItem.asset.duration;
-                    duration = CMTimeGetSeconds(time);
-                    if (isnan(duration)) {
-                        NSLog(@"Duration is infifnite, setting it to -1");
-                        duration = -1;
+                //self.currMediaId = audioFile.player.mediaId;
+                self.currMediaId = mediaId;
+
+                // audioFile.player != nil  or player was successfully created
+                // get the audioSession and set the category to allow Playing when device is locked or ring/silent switch engaged
+                if ([self hasAudioSession]) {
+                    NSError* __autoreleasing err = nil;
+                    NSNumber* playAudioWhenScreenIsLocked = [options objectForKey:@"playAudioWhenScreenIsLocked"];
+                    BOOL bPlayAudioWhenScreenIsLocked = YES;
+                    if (playAudioWhenScreenIsLocked != nil) {
+                        bPlayAudioWhenScreenIsLocked = [playAudioWhenScreenIsLocked boolValue];
                     }
 
-                    if (audioFile.rate != nil){
-                        float customRate = [audioFile.rate floatValue];
-                        NSLog(@"Playing stream with AVPlayer & custom rate");
-                        [avPlayer setRate:customRate];
-                    } else {
-                        NSLog(@"Playing stream with AVPlayer & default rate");
-                        [avPlayer play];
+                    NSString* sessionCategory = bPlayAudioWhenScreenIsLocked ? AVAudioSessionCategoryPlayback : AVAudioSessionCategorySoloAmbient;
+                    [self.avSession setCategory:sessionCategory error:&err];
+                    if (![self.avSession setActive:YES error:&err]) {
+                        // other audio with higher priority that does not allow mixing could cause this to fail
+                        NSLog(@"Unable to play audio: %@", [err localizedFailureReason]);
+                        bError = YES;
                     }
-
-                } else {
-
-                    NSNumber* loopOption = [options objectForKey:@"numberOfLoops"];
-                    NSInteger numberOfLoops = 0;
-                    if (loopOption != nil) {
-                        numberOfLoops = [loopOption intValue] - 1;
-                    }
-                    audioFile.player.numberOfLoops = numberOfLoops;
-                    if (audioFile.player.isPlaying) {
-                        [audioFile.player stop];
-                        audioFile.player.currentTime = 0;
-                    }
-                    if (audioFile.volume != nil) {
-                        audioFile.player.volume = [audioFile.volume floatValue];
-                    }
-
-                    audioFile.player.enableRate = YES;
-                    if (audioFile.rate != nil) {
-                        audioFile.player.rate = [audioFile.rate floatValue];
-                    }
-
-                    [audioFile.player play];
-                    duration = round(audioFile.player.duration * 1000) / 1000;
                 }
                 if (!bError) {
                     NSLog(@"Playing audio sample '%@'", audioFile.resourcePath);
-                    double position = 0;
-                    if (avPlayer) {
-                        CMTime time = [avPlayer currentTime];
-                        position = CMTimeGetSeconds(time);
-                        NSLog(@"Playing stream with AVPlayer");
-                        [avPlayer play];
+                    double duration = 0;
+                    if (avPlayer.currentItem && avPlayer.currentItem.asset) {
+                        CMTime time = avPlayer.currentItem.asset.duration;
+                        duration = CMTimeGetSeconds(time);
+                        if (isnan(duration)) {
+                            NSLog(@"Duration is infifnite, setting it to -1");
+                            duration = -1;
+                        }
+
+                        if (audioFile.rate != nil){
+                            float customRate = [audioFile.rate floatValue];
+                            NSLog(@"Playing stream with AVPlayer & custom rate");
+                            [avPlayer setRate:customRate];
+                        } else {
+                            NSLog(@"Playing stream with AVPlayer & default rate");
+                            [avPlayer play];
+                        }
+
                     } else {
 
                         NSNumber* loopOption = [options objectForKey:@"numberOfLoops"];
@@ -456,35 +424,68 @@
                         }
 
                         [audioFile.player play];
-                        //double position = round(audioFile.player.duration * 1000) / 1000;
+                        duration = round(audioFile.player.duration * 1000) / 1000;
                     }
+                    if (!bError) {
+                        NSLog(@"Playing audio sample '%@'", audioFile.resourcePath);
+                        double position = 0;
+                        if (avPlayer) {
+                            CMTime time = [avPlayer currentTime];
+                            position = CMTimeGetSeconds(time);
+                            NSLog(@"Playing stream with AVPlayer");
+                            [avPlayer play];
+                        } else {
 
-                jsString = [NSString stringWithFormat:@"%@(\"%@\",%d,%.3f);\n%@(\"%@\",%d,%d);", @"cordova.require('cordova-plugin-media.Media').onStatus", mediaId, MEDIA_DURATION, duration, @"cordova.require('cordova-plugin-media.Media').onStatus", mediaId, MEDIA_STATE, MEDIA_RUNNING];
+                            NSNumber* loopOption = [options objectForKey:@"numberOfLoops"];
+                            NSInteger numberOfLoops = 0;
+                            if (loopOption != nil) {
+                                numberOfLoops = [loopOption intValue] - 1;
+                            }
+                            audioFile.player.numberOfLoops = numberOfLoops;
+                            if (audioFile.player.isPlaying) {
+                                [audioFile.player stop];
+                                audioFile.player.currentTime = 0;
+                            }
+                            if (audioFile.volume != nil) {
+                                audioFile.player.volume = [audioFile.volume floatValue];
+                            }
+
+                            audioFile.player.enableRate = YES;
+                            if (audioFile.rate != nil) {
+                                audioFile.player.rate = [audioFile.rate floatValue];
+                            }
+
+                            [audioFile.player play];
+                            //double position = round(audioFile.player.duration * 1000) / 1000;
+                        }
+
+                    jsString = [NSString stringWithFormat:@"%@(\"%@\",%d,%.3f);\n%@(\"%@\",%d,%d);", @"cordova.require('cordova-plugin-media.Media').onStatus", mediaId, MEDIA_DURATION, duration, @"cordova.require('cordova-plugin-media.Media').onStatus", mediaId, MEDIA_STATE, MEDIA_RUNNING];
+                    [self.commandDelegate evalJs:jsString];
+                }
+            }
+            if (bError) {
+                /*  I don't see a problem playing previously recorded audio so removing this section - BG
+                NSError* error;
+                // try loading it one more time, in case the file was recorded previously
+                audioFile.player = [[ AVAudioPlayer alloc ] initWithContentsOfURL:audioFile.resourceURL error:&error];
+                if (error != nil) {
+                    NSLog(@"Failed to initialize AVAudioPlayer: %@\n", error);
+                    audioFile.player = nil;
+                } else {
+                    NSLog(@"Playing audio sample '%@'", audioFile.resourcePath);
+                    audioFile.player.numberOfLoops = numberOfLoops;
+                    [audioFile.player play];
+                } */
+                // error creating the session or player
+                // jsString = [NSString stringWithFormat: @"%@(\"%@\",%d,%d);", @"cordova.require('cordova-plugin-media.Media').onStatus", mediaId, MEDIA_ERROR,  MEDIA_ERR_NONE_SUPPORTED];
+                jsString = [NSString stringWithFormat:@"%@(\"%@\",%d,%@);", @"cordova.require('cordova-plugin-media.Media').onStatus", mediaId, MEDIA_ERROR, [self createMediaErrorWithCode:MEDIA_ERR_NONE_SUPPORTED message:nil]];
                 [self.commandDelegate evalJs:jsString];
             }
         }
-        if (bError) {
-            /*  I don't see a problem playing previously recorded audio so removing this section - BG
-            NSError* error;
-            // try loading it one more time, in case the file was recorded previously
-            audioFile.player = [[ AVAudioPlayer alloc ] initWithContentsOfURL:audioFile.resourceURL error:&error];
-            if (error != nil) {
-                NSLog(@"Failed to initialize AVAudioPlayer: %@\n", error);
-                audioFile.player = nil;
-            } else {
-                NSLog(@"Playing audio sample '%@'", audioFile.resourcePath);
-                audioFile.player.numberOfLoops = numberOfLoops;
-                [audioFile.player play];
-            } */
-            // error creating the session or player
-            // jsString = [NSString stringWithFormat: @"%@(\"%@\",%d,%d);", @"cordova.require('cordova-plugin-media.Media').onStatus", mediaId, MEDIA_ERROR,  MEDIA_ERR_NONE_SUPPORTED];
-            jsString = [NSString stringWithFormat:@"%@(\"%@\",%d,%@);", @"cordova.require('cordova-plugin-media.Media').onStatus", mediaId, MEDIA_ERROR, [self createMediaErrorWithCode:MEDIA_ERR_NONE_SUPPORTED message:nil]];
-            [self.commandDelegate evalJs:jsString];
-        }
-    }
 
-    // else audioFile was nil - error already returned from audioFile for resource
-    return;
+        // else audioFile was nil - error already returned from audioFile for resource
+        return;
+    }
 
     }];
 }
